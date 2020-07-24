@@ -1,0 +1,6 @@
+LR: 0.0001
+EPOCHS: 10
+DEVICE: cuda
+N_WORKERS: 4
+BATCH_SIZE: 8
+DS_PATH: '/media/rgasparini/Volume/Dataset/cat_dog'
