@@ -22,8 +22,12 @@ class Trainer(object):
 
         self.cnf = cnf
 
+        # init train loader
+        self.train_loader = DataGenerator(self.cnf)
+        self.test_loader = DataGenerator(self.cnf, partition='test', shuffle=False)
+
         # init model
-        self.model = DummyModel()
+        self.model = DummyModel(self.cnf.input_shape)
 
         # init optimizer
         self.optimizer = keras.optimizers.Adam(learning_rate=self.cnf.lr)
@@ -33,10 +37,6 @@ class Trainer(object):
 
         # compile the model
         self.model.compile(optimizer=self.optimizer, loss=self.loss, metrics=['accuracy'])
-
-        # init train loader
-        self.train_loader = DataGenerator(self.cnf)
-        self.test_loader = DataGenerator(self.cnf, partition='test', shuffle=False)
 
         # init logging stuffs
         self.log_path = cnf.exp_log_path
@@ -49,9 +49,6 @@ class Trainer(object):
         # starting values
         self.epoch = 0
         self.best_test_loss = None
-
-        # init progress bar
-        self.progress_bar = ProgressBar(max_step=self.log_freq, max_epoch=self.cnf.epochs)
 
         # possibly load checkpoint
         self.load_ck()
@@ -75,34 +72,24 @@ class Trainer(object):
         """
         train model for one epoch on the Training-Set.
         """
-        start_time = time()
 
         # fit the model
-        self.model.fit(self.train_loader, epochs=self.cnf.epochs, batch_size=self.cnf.batch_size, verbose=0)
-
-
-        # log epoch duration
-        print(f' │ T: {time() - start_time:.2f} s')
+        self.model.fit(self.train_loader, epochs=1)
 
 
     def test(self):
         """
         test model on the Test-Set
         """
-        self.model.eval()
 
-        t = time()
-
-        loss, acc = self.model.evaluate(self.test_loader, verbose=0)
+        loss, acc = self.model.evaluate(self.test_loader)
 
         self.test_losses = []
-        print(f'\t● AVG Loss on TEST-set: {loss:.6f} │ T: {time() - t:.2f} s')
         # self.sw.add_scalar(tag='test_loss', scalar_value=loss, global_step=self.epoch)
 
         # save best model
         if self.best_test_loss is None or loss < self.best_test_loss:
             self.best_test_loss = loss
-
 
     def run(self):
         """

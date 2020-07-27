@@ -93,6 +93,8 @@ class Conf(object):
         self.ds_path = y.get('DS_PATH','.') # type: str
         self.ds_path = Path(self.ds_path)
 
+        self.input_shape = y.get('INPUT_SHAPE', (64,64,3))  # type: str
+        self.input_shape = tuple([int(i) for i in self.input_shape.split(',')])
 
     def write_to_file(self, out_file_path):
         # type: (str) -> None

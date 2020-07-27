@@ -5,7 +5,7 @@
 import numpy as np
 from tensorflow import keras
 from utils import imread_cv
-import cv2
+from utils import letterbox
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
@@ -66,14 +66,14 @@ class DataGenerator(keras.utils.Sequence):
         for i, ID in enumerate(list_IDs_temp):
             # Store sample
             img = imread_cv(ID[0])
-            img = cv2.resize(img, (224,224))
-            X.append(img / 255.0)
+            img, ratio, ds = letterbox(img,new_shape=self.cnf.input_shape[:2], color=(0,0,0), auto=False)
+            X.append((img / 2550))
 
             # Store class
             y.append(ID[1])
 
         # bo vabe qua tf vuole una matrice anzichè un vettore anzichè uno scalare....booooo
-        return X, keras.utils.to_categorical(y, num_classes=self.n_classes)
+        return np.asarray(X), keras.utils.to_categorical(y,num_classes=self.n_classes)
 
 
 def main():
