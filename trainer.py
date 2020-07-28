@@ -4,7 +4,7 @@
 
 from conf import Conf
 from dataset.dummy_ds import DataGenerator
-from models.model import DummyModel
+from models.model import get_DummyModel
 
 import tensorflow as tf
 from tensorflow import keras
@@ -23,7 +23,7 @@ class Trainer(object):
         self.test_loader = DataGenerator(self.cnf, partition='test')
 
         # init model
-        self.model = DummyModel()
+        self.model = get_DummyModel(input_shape=self.cnf.input_shape)
 
         # init optimizer
         self.optimizer = keras.optimizers.Adam(learning_rate=self.cnf.lr)
@@ -37,7 +37,7 @@ class Trainer(object):
         # init logging stuffs
         self.callbacks = [
             keras.callbacks.TensorBoard(log_dir=self.cnf.exp_log_path),
-            keras.callbacks.ModelCheckpoint(self.cnf.exp_weights_path /'cp_{epoch:02d}_{val_loss:.2f}', verbose=1, save_best_only=True),
+            keras.callbacks.ModelCheckpoint(self.cnf.exp_weights_path, verbose=1, save_best_only=True),
             keras.callbacks.EarlyStopping(patience=10, verbose=1, restore_best_weights=True)
         ]
 
@@ -50,10 +50,9 @@ class Trainer(object):
         """
 
         if self.cnf.exp_weights_path.exists():
-            latest = tf.train.latest_checkpoint(self.cnf.exp_weights_path)
-            self.model.load_weights(latest)
-            # self.model = keras.models.load_model(latest)
-            print(f'[loaded checkpoint \'{latest}\']')
+            # self.model.load_weights(latest)
+            self.model = keras.models.load_model(self.cnf.exp_weights_path)
+            print(f'[loaded checkpoint \'{self.cnf.exp_weights_path}\']')
 
 
     def train(self):
