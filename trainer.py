@@ -19,8 +19,8 @@ class Trainer(object):
 
         # init train loader
         self.train_loader = DataGenerator(self.cnf)
-        self.val_loader = DataGenerator(self.cnf, partition='val')
-        self.test_loader = DataGenerator(self.cnf, partition='test')
+        self.val_loader = DataGenerator(self.cnf, partition='val', shuffle=False)
+        self.test_loader = DataGenerator(self.cnf, partition='test', shuffle=False)
 
         # init model
         self.model = get_DummyModel(input_shape=self.cnf.input_shape)
@@ -35,6 +35,7 @@ class Trainer(object):
         self.model.compile(optimizer=self.optimizer, loss=self.loss, metrics=['accuracy'])
 
         # init logging stuffs
+
         self.callbacks = [
             keras.callbacks.TensorBoard(log_dir=self.cnf.exp_log_path),
             keras.callbacks.ModelCheckpoint(self.cnf.exp_weights_path, verbose=1, save_best_only=True),
@@ -54,14 +55,14 @@ class Trainer(object):
             self.model = keras.models.load_model(self.cnf.exp_weights_path)
             print(f'[loaded checkpoint \'{self.cnf.exp_weights_path}\']')
 
-
     def train(self):
         """
         train model for one epoch on the Training-Set.
         """
 
         # fit the model
-        self.model.fit(self.train_loader, epochs=self.cnf.epochs, validation_data=self.val_loader, callbacks=self.callbacks)
+        self.model.fit(self.train_loader, epochs=self.cnf.epochs, validation_data=self.val_loader,
+                       callbacks=self.callbacks, use_multiprocessing=True, workers=self.cnf.n_workers)
 
     def test(self):
         """
