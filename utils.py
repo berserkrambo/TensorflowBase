@@ -32,7 +32,9 @@ def imread_cv(path):
     :param path:
     :return:
     """
-    return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
+    img = cv2.imread(path)
+    assert img is not None, 'img is None'
+    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 
 def pyplot_to_numpy(pyplot_figure):

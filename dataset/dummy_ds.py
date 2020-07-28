@@ -7,6 +7,7 @@ from tensorflow import keras
 from utils import imread_cv
 from utils import letterbox
 
+
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, cnf, shuffle=True, partition='train'):
@@ -47,6 +48,11 @@ class DataGenerator(keras.utils.Sequence):
 
         # Generate data
         X, y = self.__data_generation(list_IDs_temp)
+
+        # if self.partition in ['train', 'val']:
+        #     return X, y
+        # elif self.partition == 'test':
+        #     return X
 
         return X, y
 

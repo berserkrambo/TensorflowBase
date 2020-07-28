@@ -1,19 +1,14 @@
 # -*- coding: utf-8 -*-
 # ---------------------
 
-from time import time
-
-import numpy as np
-
 
 from conf import Conf
 from dataset.dummy_ds import DataGenerator
 from models.model import DummyModel
-from progress_bar import ProgressBar
 
 import tensorflow as tf
 from tensorflow import keras
-import tensorboard
+
 
 class Trainer(object):
 
@@ -24,10 +19,11 @@ class Trainer(object):
 
         # init train loader
         self.train_loader = DataGenerator(self.cnf)
-        self.test_loader = DataGenerator(self.cnf, partition='test', shuffle=False)
+        self.val_loader = DataGenerator(self.cnf, partition='val')
+        self.test_loader = DataGenerator(self.cnf, partition='test')
 
         # init model
-        self.model = DummyModel(self.cnf.input_shape)
+        self.model = DummyModel()
 
         # init optimizer
         self.optimizer = keras.optimizers.Adam(learning_rate=self.cnf.lr)
@@ -39,33 +35,25 @@ class Trainer(object):
         self.model.compile(optimizer=self.optimizer, loss=self.loss, metrics=['accuracy'])
 
         # init logging stuffs
-        self.log_path = cnf.exp_log_path
-        print(f'tensorboard --logdir={cnf.project_log_path.abspath()} --samples_per_plugin=4096\n')
-        # self.sw = tf.summary.SummaryWriter(self.log_path)
-        self.log_freq = len(self.train_loader)
-        self.train_losses = []
-        self.test_losses = []
-
-        # starting values
-        self.epoch = 0
-        self.best_test_loss = None
+        self.callbacks = [
+            keras.callbacks.TensorBoard(log_dir=self.cnf.exp_log_path),
+            keras.callbacks.ModelCheckpoint(self.cnf.exp_weights_path /'cp_{epoch:02d}_{val_loss:.2f}', verbose=1, save_best_only=True),
+            keras.callbacks.EarlyStopping(patience=10, verbose=1, restore_best_weights=True)
+        ]
 
         # possibly load checkpoint
         self.load_ck()
-
 
     def load_ck(self):
         """
         load training checkpoint
         """
-        pass
 
-
-    def save_ck(self):
-        """
-        save training checkpoint
-        """
-        pass
+        if self.cnf.exp_weights_path.exists():
+            latest = tf.train.latest_checkpoint(self.cnf.exp_weights_path)
+            self.model.load_weights(latest)
+            # self.model = keras.models.load_model(latest)
+            print(f'[loaded checkpoint \'{latest}\']')
 
 
     def train(self):
@@ -74,8 +62,7 @@ class Trainer(object):
         """
 
         # fit the model
-        self.model.fit(self.train_loader, epochs=1)
-
+        self.model.fit(self.train_loader, epochs=self.cnf.epochs, validation_data=self.val_loader, callbacks=self.callbacks)
 
     def test(self):
         """
@@ -83,22 +70,12 @@ class Trainer(object):
         """
 
         loss, acc = self.model.evaluate(self.test_loader)
-
-        self.test_losses = []
-        # self.sw.add_scalar(tag='test_loss', scalar_value=loss, global_step=self.epoch)
-
-        # save best model
-        if self.best_test_loss is None or loss < self.best_test_loss:
-            self.best_test_loss = loss
+        print("accuracy on test", acc)
 
     def run(self):
         """
         start model training procedure (train > test > checkpoint > repeat)
         """
-        for _ in range(self.epoch, self.cnf.epochs):
-            self.train()
+        self.train()
 
-            self.test()
-
-            self.epoch += 1
-            self.save_ck()
+        self.test()

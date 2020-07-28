@@ -61,6 +61,7 @@ class Conf(object):
         # define output paths
         self.project_log_path = Path('./log')  # alternative: Path(Conf.CAPRA_PATH / 'log' / self.project_name)
         self.exp_log_path = self.project_log_path / exp_name
+        self.exp_weights_path = self.exp_log_path / 'weights'
 
         # set random seed
         self.seed = set_seed(seed)  # type: int
