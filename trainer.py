@@ -55,13 +55,6 @@ class Trainer(object):
             self.model = keras.models.load_model(self.cnf.exp_weights_path)
             print(f'[loaded checkpoint \'{self.cnf.exp_weights_path}\']')
 
-            # Convert the model.
-            converter = tf.lite.TFLiteConverter.from_saved_model(self.cnf.exp_weights_path)
-            tflite_model = converter.convert()
-
-            with tf.io.gfile.GFile('model.tflite', 'wb') as f:
-                f.write(tflite_model)
-
     def export_tflite(self):
         """
         convert saved checkpoint to tflite
