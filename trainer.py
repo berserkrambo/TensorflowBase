@@ -64,6 +64,7 @@ class Trainer(object):
 
             # Convert the model.
             converter = tf.lite.TFLiteConverter.from_saved_model(self.cnf.exp_weights_path)
+            # converter.optimizations = [tf.lite.Optimize.DEFAULT]  # da capire questa roba qua
             tflite_model = converter.convert()
 
             self.cnf.tflite_model_outpath.makedirs_p()
