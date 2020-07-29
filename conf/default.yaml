@@ -7,7 +7,10 @@ N_WORKERS: 4
 BATCH_SIZE: 96
 
 # dataset path
-DS_PATH: '/home/rgasparini/Documents/cat_dog'
+DS_PATH: /media/rgasparini/Volume/Dataset/cat_dog
 
 # network input shape as keras channel last ordering separated by ',' , data input will be resized to that shape proportionally and keeping the original AR
 INPUT_SHAPE: 128,128,3
+
+# convert to tflite [True, False]
+EXPORT_TFLITE: True

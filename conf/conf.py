@@ -97,6 +97,10 @@ class Conf(object):
         self.input_shape = y.get('INPUT_SHAPE', (64,64,3))  # type: str
         self.input_shape = tuple([int(i) for i in self.input_shape.split(',')])
 
+        self.export_tflite = y.get('EXPORT_TFLITE', True)  # type: bool
+        assert self.export_tflite in [True, False], 'tflite export settings wrong, valid inputs are [True, False]'
+        self.tflite_model_outpath = self.exp_weights_path.parent
+
     def write_to_file(self, out_file_path):
         # type: (str) -> None
         """

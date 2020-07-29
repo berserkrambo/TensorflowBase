@@ -29,7 +29,7 @@ class Trainer(object):
         self.optimizer = keras.optimizers.Adam(learning_rate=self.cnf.lr)
 
         # init loss
-        self.loss = tf.keras.losses.CategoricalCrossentropy()
+        self.loss = tf.keras.losses.BinaryCrossentropy()
 
         # compile the model
         self.model.compile(optimizer=self.optimizer, loss=self.loss, metrics=['accuracy'])
@@ -55,6 +55,29 @@ class Trainer(object):
             self.model = keras.models.load_model(self.cnf.exp_weights_path)
             print(f'[loaded checkpoint \'{self.cnf.exp_weights_path}\']')
 
+            # Convert the model.
+            converter = tf.lite.TFLiteConverter.from_saved_model(self.cnf.exp_weights_path)
+            tflite_model = converter.convert()
+
+            with tf.io.gfile.GFile('model.tflite', 'wb') as f:
+                f.write(tflite_model)
+
+    def export_tflite(self):
+        """
+        convert saved checkpoint to tflite
+        """
+
+        if self.cnf.exp_weights_path.exists():
+
+            # Convert the model.
+            converter = tf.lite.TFLiteConverter.from_saved_model(self.cnf.exp_weights_path)
+            tflite_model = converter.convert()
+
+            self.cnf.tflite_model_outpath.makedirs_p()
+
+            with tf.io.gfile.GFile(self.cnf.tflite_model_outpath /'model.tflite', 'wb') as f:
+                f.write(tflite_model)
+
     def train(self):
         """
         train model for one epoch on the Training-Set.
@@ -79,3 +102,6 @@ class Trainer(object):
         self.train()
 
         self.test()
+
+        if self.cnf.export_tflite:
+            self.export_tflite()
