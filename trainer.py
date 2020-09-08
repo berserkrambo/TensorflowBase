@@ -76,7 +76,6 @@ class Trainer(object):
 
                 img = tf.data.Dataset.from_tensor_slices(img_list).batch(1)
                 for i in img.take(self.cnf.batch_size):
-                    print(i)
                     yield [i]
 
             converter.representative_dataset = representative_dataset_gen
