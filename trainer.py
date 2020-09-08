@@ -45,6 +45,7 @@ class Trainer(object):
         # possibly load checkpoint
         self.load_ck()
 
+
     def load_ck(self):
         """
         load training checkpoint
@@ -64,7 +65,25 @@ class Trainer(object):
 
             # Convert the model.
             converter = tf.lite.TFLiteConverter.from_saved_model(self.cnf.exp_weights_path)
-            # converter.optimizations = [tf.lite.Optimize.DEFAULT]  # da capire questa roba qua
+            converter.optimizations = [tf.lite.Optimize.DEFAULT] # quant 8 bit
+
+            def representative_dataset_gen():
+                img_list = []
+                for batch in self.train_loader:
+                    # Get sample input data as a numpy array in a method of your choosing.
+                    for img in batch[0]:
+                        img_list.append(img)
+
+                img = tf.data.Dataset.from_tensor_slices(img_list).batch(1)
+                for i in img.take(self.cnf.batch_size):
+                    print(i)
+                    yield [i]
+
+            converter.representative_dataset = representative_dataset_gen
+            converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+            converter.inference_input_type = tf.int8  # or tf.uint8
+            converter.inference_output_type = tf.int8  # or tf.uint8
+
             tflite_model = converter.convert()
 
             self.cnf.tflite_model_outpath.makedirs_p()

@@ -73,7 +73,7 @@ class DataGenerator(keras.utils.Sequence):
             # Store sample
             img = imread_cv(ID[0])
             img, ratio, ds = letterbox(img,new_shape=self.cnf.input_shape[:2], color=(0,0,0), auto=False)
-            X.append((img / 2550))
+            X.append((img / 255.0).astype(np.float32))
 
             # Store class
             y.append(ID[1])
