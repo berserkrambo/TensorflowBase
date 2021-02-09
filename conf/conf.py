@@ -87,6 +87,7 @@ class Conf(object):
         self.epochs = y.get('EPOCHS', 10)  # type: int
         self.n_workers = y.get('N_WORKERS', 4)  # type: int
         self.batch_size = y.get('BATCH_SIZE', 8)  # type: int
+        self.model_max_pred = y.get('MODEL_MAX_PRED', 64)  # type: int
 
         default_device = 'cuda'
         self.device = y.get('DEVICE', default_device)  # type: str

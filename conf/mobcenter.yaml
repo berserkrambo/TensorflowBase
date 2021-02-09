@@ -1,0 +1,19 @@
+# learning rate
+LR: 0.0001
+
+EPOCHS: 200
+DEVICE: cuda
+N_WORKERS: 4
+BATCH_SIZE: 16
+
+# dataset path
+DS_PATH: F:\Progetti\Face Mask Detection Dataset
+
+# network input shape as keras channel last ordering separated by ',' , data input will be resized to that shape proportionally and keeping the original AR
+INPUT_SHAPE: 256,256,3
+
+# network output for classes, heatmap_centers, sizes
+MODEL_MAX_PRED: 64
+
+# convert to tflite [True, False]
+EXPORT_TFLITE: True

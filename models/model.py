@@ -4,7 +4,7 @@
 from tensorflow import keras
 
 
-def get_MobileCenterModel(input_shape):
+def get_MobileCenterModel(input_shape, max_pred=64):
 
     base_model = keras.applications.MobileNetV2(
     input_shape=input_shape,
@@ -19,21 +19,21 @@ def get_MobileCenterModel(input_shape):
 
     # heatmap prediction
     hm = keras.layers.Conv2D(filters=input_shape[0]//4, kernel_size=3, padding='same', activation='relu')(x)
-    hm = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1,1) ,activation=None)(hm)
+    hm = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1,1), activation=None, name='hm')(hm)
 
     # center prediction
-    hm_c = keras.layers.Conv2D(filters=input_shape[0] // 4, kernel_size=3, padding='same', activation='relu')(hm)
-    hm_c = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None)(hm_c)
+    hm_c = keras.layers.Conv2D(filters=max_pred, kernel_size=3, padding='same', activation='relu')(hm)
+    hm_c = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='hm_c')(hm_c)
 
     # size prediction
-    s = keras.layers.Conv2D(filters=input_shape[0]//4, kernel_size=3, padding='same', activation='relu')(x)
-    s = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None)(s)
+    s = keras.layers.Conv2D(filters=max_pred, kernel_size=3, padding='same', activation='relu')(x)
+    s = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='s')(s)
 
     # class prediction
-    c = keras.layers.Conv2D(filters=input_shape[0] // 4, kernel_size=3, padding='same', activation='relu')(x)
-    c = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None)(c)
+    # c = keras.layers.Conv2D(filters=max_pred, kernel_size=3, padding='same', activation='relu')(x)
+    # c = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='c')(c)
 
-    model = keras.Model(inputs=base_model.input, outputs=[hm, hm_c, s, c])
+    model = keras.Model(inputs=base_model.input, outputs=[hm, hm_c, s])
 
     return model
 
