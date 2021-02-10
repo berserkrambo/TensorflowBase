@@ -29,7 +29,6 @@ class DataGenerator(keras.utils.Sequence):
 
         self.n_classes = 2
         self.shuffle = shuffle
-
         self.on_epoch_end()
 
     def __len__(self):
@@ -74,7 +73,7 @@ class DataGenerator(keras.utils.Sequence):
 
             hm = np.zeros(shape=(img.shape[0], img.shape[1]))
             # hc = np.zeros(shape=(img.shape[0], img.shape[1], 2))
-            sz = np.zeros(shape=(img.shape[0], img.shape[1], 1))
+            # sz = np.zeros(shape=(img.shape[0], img.shape[1], 1))
 
             label = ET.parse(ID.replace("png", "xml"))
             label_root = label.getroot()
@@ -89,12 +88,12 @@ class DataGenerator(keras.utils.Sequence):
                 cnt = (int((xmin + xmax) // 2), int((ymin + ymax) // 2))
                 # hc[bi] = np.asarray(cnt)
                 # sz[bi] = (int((xmax-xmin+ymax-ymin)//2))
-                sz[cnt[1], cnt[0]] = int(max((xmax-xmin), (ymax-ymin)))
+                # sz[cnt[1], cnt[0]] = int(max((xmax-xmin), (ymax-ymin)))
                 r = gaussian_radius((int(ymax-ymin), int(xmax-xmin)))
 
                 draw_gaussian(hm, cnt, r)
 
-                cv2.circle(img,cnt,3,[0,0,255],1)
+                # cv2.circle(img,cnt,3,[0,0,255],1)
                 # cv2.rectangle(img, (xmin, ymin), (xmax, ymax), [0, 0, 255], 1)
                 # cv2.imshow(f"{i}_{bi}.jpg", img[ymin:ymax,xmin:xmax])
             # cv2.imshow(f"{i}", img)
@@ -103,11 +102,13 @@ class DataGenerator(keras.utils.Sequence):
             # cv2.waitKey()
 
             # heatmaps_centers.append(np.asarray(hc))
-            sizes.append(np.asarray(sz))
+            # sizes.append(np.asarray(sz))
 
             X.append((img / 255.0).astype(np.float32))
 
             hm = cv2.resize(hm, (64, 64))
+            # cv2.imshow(f"{i}_h", (hm * 255.).astype(np.uint8))
+            # cv2.waitKey()
             hm = np.expand_dims(hm, 2)
             heatmaps.append(hm)
 

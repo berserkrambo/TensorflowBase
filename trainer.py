@@ -96,7 +96,7 @@ class Trainer(object):
 
         start_time = time()
         times = []
-        self.train_loader.on_epoch_end()
+        # self.train_loader.on_epoch_end()
         for step, sample in enumerate(self.train_loader):
             t = time()
 
