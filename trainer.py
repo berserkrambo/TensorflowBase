@@ -4,11 +4,13 @@
 
 from conf import Conf
 from dataset.dummy_ds import DataGenerator
-from models.model import get_DummyModel
+from models.model import get_MobileCenterModel
 
 import tensorflow as tf
 from tensorflow import keras
-
+from progress_bar import ProgressBar
+from time import time
+import numpy as np
 
 class Trainer(object):
 
@@ -19,28 +21,47 @@ class Trainer(object):
 
         # init train loader
         self.train_loader = DataGenerator(self.cnf)
-        self.val_loader = DataGenerator(self.cnf, partition='val', shuffle=False)
         self.test_loader = DataGenerator(self.cnf, partition='test', shuffle=False)
 
         # init model
-        self.model = get_DummyModel(input_shape=self.cnf.input_shape)
+        self.model = get_MobileCenterModel(input_shape=self.cnf.input_shape)
 
         # init optimizer
         self.optimizer = keras.optimizers.Adam(learning_rate=self.cnf.lr)
 
         # init loss
-        self.loss = tf.keras.losses.BinaryCrossentropy()
+        self.loss_mse = tf.keras.losses.MeanSquaredError()
+        # self.loss_mae = tf.keras.losses.MeanAbsoluteError()
+
+        # init metrics
+        self.test_mse_metric = keras.metrics.MeanSquaredError()
 
         # compile the model
-        self.model.compile(optimizer=self.optimizer, loss=self.loss, metrics=['accuracy'])
+        # self.model.compile(optimizer=self.optimizer,
+        #                    loss={'hm': 'mse'},
+        #                    metrics={'hm': 'mse'})
 
         # init logging stuffs
 
-        self.callbacks = [
-            keras.callbacks.TensorBoard(log_dir=self.cnf.exp_log_path),
-            keras.callbacks.ModelCheckpoint(self.cnf.exp_weights_path, verbose=1, save_best_only=True),
-            keras.callbacks.EarlyStopping(patience=10, verbose=1, restore_best_weights=True)
-        ]
+        # self.callbacks = [
+        #     keras.callbacks.TensorBoard(log_dir=self.cnf.exp_log_path),
+        #     keras.callbacks.ModelCheckpoint(self.cnf.exp_weights_path, verbose=1, save_best_only=True),
+        #     keras.callbacks.EarlyStopping(patience=50, verbose=1, restore_best_weights=True)
+        # ]
+
+        self.log_path = cnf.exp_log_path
+        print(f'tensorboard --logdir={cnf.project_log_path.abspath()}\n')
+        self.sw = tf.summary.create_file_writer(self.log_path)
+        self.log_freq = len(self.train_loader)
+        self.train_losses = []
+        self.test_losses = []
+
+        # starting values
+        self.epoch = 0
+        self.best_test_loss = None
+
+        # init progress bar
+        self.progress_bar = ProgressBar(max_step=self.log_freq, max_epoch=self.cnf.epochs)
 
         # possibly load checkpoint
         self.load_ck()
@@ -55,6 +76,106 @@ class Trainer(object):
             # self.model.load_weights(latest)
             self.model = keras.models.load_model(self.cnf.exp_weights_path)
             print(f'[loaded checkpoint \'{self.cnf.exp_weights_path}\']')
+
+    def save_ck(self, save_opt=True):
+        """
+        save training checkpoint
+        """
+        save_path = self.cnf.exp_weights_path if save_opt else self.cnf.exp_weights_path / "best"
+        keras.models.save_model(self.model, save_path, include_optimizer=save_opt)
+
+
+    def train(self):
+        """
+        train model for one epoch on the Training-Set.
+        """
+
+        # fit the model
+        # self.model.fit(x=self.train_loader, epochs=self.cnf.epochs, validation_data=self.val_loader,
+        #                callbacks=self.callbacks, use_multiprocessing=True, workers=self.cnf.n_workers)
+
+        start_time = time()
+        times = []
+        for step, sample in enumerate(self.train_loader):
+            t = time()
+
+            x, y_true = sample
+
+            # Open a GradientTape to record the operations run
+            # during the forward pass, which enables auto-differentiation.
+            with tf.GradientTape() as tape:
+                # Run the forward pass of the layer.
+                # The operations that the layer applies
+                # to its inputs are going to be recorded
+                # on the GradientTape.
+                y_pred = self.model(x, training=True)
+
+                # Compute the loss value for this minibatch.
+                loss = self.loss_mse(y_pred, y_true)
+
+                # Use the gradient tape to automatically retrieve
+                # the gradients of the trainable variables with respect to the loss.
+                grads = tape.gradient(loss, self.model.trainable_weights)
+
+                # Run one step of gradient descent by updating
+                # the value of the variables to minimize the loss.
+                self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
+
+            self.train_losses.append(loss)
+
+            # print an incredible progress bar
+            times.append(time() - t)
+            if self.cnf.log_each_step or (not self.cnf.log_each_step and self.progress_bar.progress == 1):
+                print(f'\r{self.progress_bar} '
+                      f'│ Loss: {np.mean(self.train_losses):.6f} '
+                      f'│ ↯: {1 / np.mean(times):5.2f} step/s', end='')
+            self.progress_bar.inc()
+
+        # log average loss of this epoch
+        mean_epoch_loss = np.mean(self.train_losses)
+        with self.sw.as_default():
+            self.sw.scalar(tag='train_loss', scalar_value=mean_epoch_loss, global_step=self.epoch)
+        self.sw.flush()
+        self.train_losses = []
+
+        # log epoch duration
+        print(f' │ T: {time() - start_time:.2f} s')
+
+
+    def test(self):
+        """
+        test model on the Test-Set
+        """
+
+        t = time()
+        for step, sample in enumerate(self.test_loader):
+            x, y_true = sample
+            x, y_true = x.to(self.cnf.device), y_true.to(self.cnf.device)
+            y_pred = self.model(x, training=False)
+
+            self.test_mse_metric.update_state(y_true, y_pred)
+
+            # draw results for this step in a 3 rows grid:
+            # row #1: input (x)
+            # row #2: predicted_output (y_pred)
+            # row #3: target (y_true)
+            grid = tf.concat([x, y_pred, y_true], dim=0)
+            # grid = tv.utils.make_grid(grid, normalize=True, range=(0, 1), nrow=x.shape[0])
+            # self.sw.add_image(tag=f'results_{step}', img_tensor=grid, global_step=self.epoch)
+
+        # log average loss on test set
+        mean_test_loss = np.mean(self.test_losses)
+        self.test_losses = []
+        print(f'\t● AVG Loss on TEST-set: {mean_test_loss:.6f} │ T: {time() - t:.2f} s')
+        with self.sw.as_default():
+            self.sw.add_scalar(tag='test_loss', scalar_value=mean_test_loss, global_step=self.epoch)
+        self.sw.flush()
+
+        # save best model
+        if self.best_test_loss is None or mean_test_loss < self.best_test_loss:
+            self.best_test_loss = mean_test_loss
+            self.save_ck(save_opt=False)
+
 
     def export_tflite(self):
         """
@@ -90,30 +211,20 @@ class Trainer(object):
             with tf.io.gfile.GFile(self.cnf.tflite_model_outpath /'model.tflite', 'wb') as f:
                 f.write(tflite_model)
 
-    def train(self):
-        """
-        train model for one epoch on the Training-Set.
-        """
 
-        # fit the model
-        self.model.fit(self.train_loader, epochs=self.cnf.epochs, validation_data=self.val_loader,
-                       callbacks=self.callbacks, use_multiprocessing=True, workers=self.cnf.n_workers)
 
-    def test(self):
-        """
-        test model on the Test-Set
-        """
-
-        loss, acc = self.model.evaluate(self.test_loader)
-        print("accuracy on test", acc)
 
     def run(self):
         """
         start model training procedure (train > test > checkpoint > repeat)
         """
-        self.train()
+        for _ in range(self.epoch, self.cnf.epochs):
+            self.train()
 
-        self.test()
+            self.test()
+
+            self.epoch += 1
+            self.save_ck()
 
         if self.cnf.export_tflite:
             self.export_tflite()

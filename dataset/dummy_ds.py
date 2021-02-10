@@ -45,14 +45,8 @@ class DataGenerator(keras.utils.Sequence):
         list_IDs_temp = [self.data[k] for k in indexes]
 
         # Generate data
-        X, y = self.__data_generation(list_IDs_temp)
+        return self.__data_generation(list_IDs_temp)
 
-        # if self.partition in ['train', 'val']:
-        #     return X, y
-        # elif self.partition == 'test':
-        #     return X
-
-        return X, y
 
     def on_epoch_end(self):
         'Updates indexes after each epoch'
@@ -66,7 +60,7 @@ class DataGenerator(keras.utils.Sequence):
         X = []
         sizes = []
         heatmaps = []
-        heatmaps_centers = []
+        # heatmaps_centers = []
 
         # fix coords
         # augment image -> # fix coords
@@ -76,44 +70,44 @@ class DataGenerator(keras.utils.Sequence):
         for i, ID in enumerate(list_IDs_temp):
             # Store sample
             img = imread_cv(ID)
-            # img_lt, ratio, ds = letterbox(img,new_shape=self.cnf.input_shape[:2], color=(0,0,0), auto=False)
-            # X.append((img / 255.0).astype(np.float32))
-            cnts = np.zeros(shape=(1,64,64))
+            img, ratio, ds = letterbox(img,new_shape=self.cnf.input_shape[:2], color=(0,0,0), auto=False)
+
             hm = np.zeros(shape=(img.shape[0], img.shape[1]))
+            # hc = np.zeros(shape=(img.shape[0], img.shape[1], 2))
+            sz = np.zeros(shape=(img.shape[0], img.shape[1], 1))
 
             label = ET.parse(ID.replace("png", "xml"))
             label_root = label.getroot()
-            ymin, ymax, xmin, xmax = 0, 0, 0, 0
+            # hc = np.zeros(shape=(self.cnf.model_max_pred, 2), dtype=np.int)
+            # sz = np.zeros(shape=(self.cnf.model_max_pred, 2), dtype=np.int)
             for bi, bbox in enumerate(label_root.iter('bndbox')):
-                xmin = int(bbox.find('xmin').text)
-                ymin = int(bbox.find('ymin').text)
-                xmax = int(bbox.find('xmax').text)
-                ymax = int(bbox.find('ymax').text)
-                cnt = ((xmin + xmax) // 2, (ymin + ymax) // 2)
+                xmin = int((int(bbox.find('xmin').text) * ratio[0]) + ds[0])
+                ymin = int((int(bbox.find('ymin').text) * ratio[1]) + ds[1])
+                xmax = int((int(bbox.find('xmax').text) * ratio[0]) + ds[0])
+                ymax = int((int(bbox.find('ymax').text) * ratio[1]) + ds[1])
 
+                cnt = (int((xmin + xmax) // 2), int((ymin + ymax) // 2))
+                # hc[bi] = np.asarray(cnt)
+                # sz[bi] = (int((xmax-xmin+ymax-ymin)//2))
+                sz[cnt[1], cnt[0]] = int(max((xmax-xmin), (ymax-ymin)))
                 r = gaussian_radius((int(ymax-ymin), int(xmax-xmin)))
-                draw_gaussian(hm, cnt, r)
-                cnts[bi] = cnt
+                try:
+                    draw_gaussian(hm, cnt, r)
+                    hm = cv2.resize(hm, (64,64))
+                except:
+                    a= 2
+
                 # cv2.circle(img,cnt,3,[0,0,255],1)
                 # cv2.rectangle(img, (xmin, ymin), (xmax, ymax), [0, 0, 255], 1)
                 # cv2.imshow(f"{i}_{bi}.jpg", img[ymin:ymax,xmin:xmax])
             # cv2.imshow(f"{i}", img)
+            # cv2.imshow(f"{i}_sz", sz)
             # cv2.imshow(f"{i}_h", (hm * 255.).astype(np.uint8))
             # cv2.waitKey()
 
-            X.append(img)
+            # heatmaps_centers.append(np.asarray(hc))
+            sizes.append(np.asarray(sz))
+            X.append((img / 255.0).astype(np.float32))
             heatmaps.append(hm)
 
-        return np.asarray(X), keras.utils.to_categorical(y, num_classes=self.n_classes)
-
-
-def main():
-    ds = DataGenerator()
-
-    for i in range(10):
-        x, y = ds[i]
-        print(f'Example #{i}: x.shape={x.shape}, y.shape={y.shape}')
-
-
-if __name__ == '__main__':
-    main()
+        return np.asarray(X), np.asarray(heatmaps)#, np.asarray(sizes)

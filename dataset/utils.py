@@ -2,6 +2,17 @@ import numpy as np
 import cv2
 import numexpr as ne
 
+def scale_coords(coords, meta):
+    # Rescale coords1 (xyxy) from img1_shape to img0_shape
+    coords *= 4
+    img0_shape, img1_shape = meta["img0_shape"], meta["img1_shape"]
+    gain = (max(img1_shape) / max(img0_shape))  # gain  = old / new
+    coords[:, [0, 2]] -= meta["dw"]  # x padding
+    coords[:, [1, 3]] -= meta["dh"]  # y padding
+    coords[:, :4] /= gain
+    coords[:, :4] = coords[:, :4].clip(min=0)
+    return coords
+
 def letterbox(img, new_shape=(416, 416), color=(128, 128, 128),
               auto=True, scaleFill=False, scaleup=True, interp=cv2.INTER_AREA):
     # Resize image to a 32-pixel-multiple rectangle https://github.com/ultralytics/yolov3/issues/232
