@@ -98,6 +98,7 @@ def draw_gaussian(heatmap, center, sigma, peak_value=1):
     :param sigma: Gaussian standard deviation
     :param peak_value: Gaussian peak value (default 1)
     """
+
     diameter = sigma * 6 + 1
     radius = (diameter - 1) // 2
     gaussian = get_2d_gaussian((diameter, diameter), sigma=sigma)
@@ -107,6 +108,15 @@ def draw_gaussian(heatmap, center, sigma, peak_value=1):
     left, right = min(x, radius), min(width - x, radius + 1)
     top, bottom = min(y, radius), min(height - y, radius + 1)
 
-    masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
+    if (y + bottom) - (y - top) <= 0:
+        ys = y - top + 1
+    else:
+        ys = y + bottom
+    if (x + right) - (x - left) <= 0:
+        xs = x - left + 1
+    else:
+        xs = x + right
+
+    masked_heatmap = heatmap[y - top:ys, x - left:xs]
     masked_gaussian = gaussian[radius - top:radius + bottom, radius - left:radius + right]
     np.maximum(masked_heatmap, masked_gaussian * peak_value, out=masked_heatmap)

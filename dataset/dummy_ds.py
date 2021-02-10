@@ -91,13 +91,10 @@ class DataGenerator(keras.utils.Sequence):
                 # sz[bi] = (int((xmax-xmin+ymax-ymin)//2))
                 sz[cnt[1], cnt[0]] = int(max((xmax-xmin), (ymax-ymin)))
                 r = gaussian_radius((int(ymax-ymin), int(xmax-xmin)))
-                try:
-                    draw_gaussian(hm, cnt, r)
-                    hm = cv2.resize(hm, (64,64))
-                except:
-                    a= 2
 
-                # cv2.circle(img,cnt,3,[0,0,255],1)
+                draw_gaussian(hm, cnt, r)
+
+                cv2.circle(img,cnt,3,[0,0,255],1)
                 # cv2.rectangle(img, (xmin, ymin), (xmax, ymax), [0, 0, 255], 1)
                 # cv2.imshow(f"{i}_{bi}.jpg", img[ymin:ymax,xmin:xmax])
             # cv2.imshow(f"{i}", img)
@@ -107,7 +104,11 @@ class DataGenerator(keras.utils.Sequence):
 
             # heatmaps_centers.append(np.asarray(hc))
             sizes.append(np.asarray(sz))
+
             X.append((img / 255.0).astype(np.float32))
+
+            hm = cv2.resize(hm, (64, 64))
+            hm = np.expand_dims(hm, 2)
             heatmaps.append(hm)
 
         return np.asarray(X), np.asarray(heatmaps)#, np.asarray(sizes)

@@ -11,6 +11,7 @@ from tensorflow import keras
 from progress_bar import ProgressBar
 from time import time
 import numpy as np
+import cv2
 
 class Trainer(object):
 
@@ -54,7 +55,6 @@ class Trainer(object):
         self.sw = tf.summary.create_file_writer(self.log_path)
         self.log_freq = len(self.train_loader)
         self.train_losses = []
-        self.test_losses = []
 
         # starting values
         self.epoch = 0
@@ -96,6 +96,7 @@ class Trainer(object):
 
         start_time = time()
         times = []
+        self.train_loader.on_epoch_end()
         for step, sample in enumerate(self.train_loader):
             t = time()
 
@@ -134,8 +135,8 @@ class Trainer(object):
         # log average loss of this epoch
         mean_epoch_loss = np.mean(self.train_losses)
         with self.sw.as_default():
-            self.sw.scalar(tag='train_loss', scalar_value=mean_epoch_loss, global_step=self.epoch)
-        self.sw.flush()
+            tf.summary.scalar(name='train_loss', data=mean_epoch_loss, step=self.epoch)
+            self.sw.flush()
         self.train_losses = []
 
         # log epoch duration
@@ -148,34 +149,40 @@ class Trainer(object):
         """
 
         t = time()
-        for step, sample in enumerate(self.test_loader):
-            x, y_true = sample
-            x, y_true = x.to(self.cnf.device), y_true.to(self.cnf.device)
-            y_pred = self.model(x, training=False)
-
-            self.test_mse_metric.update_state(y_true, y_pred)
-
-            # draw results for this step in a 3 rows grid:
-            # row #1: input (x)
-            # row #2: predicted_output (y_pred)
-            # row #3: target (y_true)
-            grid = tf.concat([x, y_pred, y_true], dim=0)
-            # grid = tv.utils.make_grid(grid, normalize=True, range=(0, 1), nrow=x.shape[0])
-            # self.sw.add_image(tag=f'results_{step}', img_tensor=grid, global_step=self.epoch)
-
-        # log average loss on test set
-        mean_test_loss = np.mean(self.test_losses)
-        self.test_losses = []
-        print(f'\t● AVG Loss on TEST-set: {mean_test_loss:.6f} │ T: {time() - t:.2f} s')
         with self.sw.as_default():
-            self.sw.add_scalar(tag='test_loss', scalar_value=mean_test_loss, global_step=self.epoch)
-        self.sw.flush()
+            for step, sample in enumerate(self.test_loader):
+                x, y_true = sample
+                y_pred = self.model(x, training=False)
 
-        # save best model
-        if self.best_test_loss is None or mean_test_loss < self.best_test_loss:
-            self.best_test_loss = mean_test_loss
-            self.save_ck(save_opt=False)
+                self.test_mse_metric.update_state(y_true, y_pred)
 
+                # draw results for this step in a 3 rows grid:
+                # row #1: input (x)
+                # row #2: predicted_output (y_pred)
+                # row #3: target (y_true)
+
+                if step == 0:
+                    x_np_ = (x[0].copy() * 255).astype(np.uint8)
+                    y_pred_np_ = y_pred[0].numpy()
+                    cv2.normalize(y_pred_np_,y_pred_np_,0,255,cv2.NORM_MINMAX)
+                    y_pred_np_ = np.array(y_pred_np_, dtype=np.uint8)
+                    y_true_np_ = (y_true[0].copy()  * 255).astype(np.uint8)
+                    x_np_ = np.expand_dims(cv2.resize(cv2.cvtColor(x_np_, cv2.COLOR_RGB2GRAY), (y_pred_np_.shape[1], y_pred_np_.shape[0])),2)
+                    grid = np.expand_dims(np.hstack([x_np_, y_pred_np_, y_true_np_]),0)
+                    tf.summary.image(name=f'results_{step}', data=grid, step=self.epoch)
+                    self.sw.flush()
+
+            # log average loss on test set
+            mean_test_mse = self.test_mse_metric.result()
+            print(f'\t● AVG MSE on TEST-set: {mean_test_mse:.6f} │ T: {time() - t:.2f} s')
+
+            tf.summary.scalar(name='test_mse', data=mean_test_mse, step=self.epoch)
+            self.sw.flush()
+
+            # save best model
+            if self.best_test_loss is None or mean_test_mse < self.best_test_loss:
+                self.best_test_loss = mean_test_mse
+                self.save_ck(save_opt=False)
 
     def export_tflite(self):
         """
