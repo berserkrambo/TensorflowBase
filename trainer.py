@@ -3,7 +3,7 @@
 
 
 from conf import Conf
-from dataset.dummy_ds import DataGenerator
+from dataset.widerface import DataGenerator
 from models.model import get_MobileCenterModel
 
 import tensorflow as tf
@@ -12,6 +12,8 @@ from progress_bar import ProgressBar
 from time import time
 import numpy as np
 import cv2
+import torch
+import torchvision as tv
 
 class Trainer(object):
 
@@ -21,7 +23,7 @@ class Trainer(object):
         self.cnf = cnf
 
         # init train loader
-        self.train_loader = DataGenerator(self.cnf)
+        self.train_loader = DataGenerator(self.cnf, partition='train', shuffle=True)
         self.test_loader = DataGenerator(self.cnf, partition='test', shuffle=False)
 
         # init model
@@ -35,7 +37,9 @@ class Trainer(object):
         # self.loss_mae = tf.keras.losses.MeanAbsoluteError()
 
         # init metrics
-        self.test_mse_metric = keras.metrics.MeanSquaredError()
+        self.test_h_mse_metric = keras.metrics.MeanSquaredError()
+        self.test_cnt_mse_metric = keras.metrics.MeanSquaredError()
+        self.test_s_mse_metric = keras.metrics.MeanSquaredError()
 
         # compile the model
         # self.model.compile(optimizer=self.optimizer,
@@ -101,7 +105,7 @@ class Trainer(object):
             t = time()
 
             x, y_true = sample
-
+            y_true_h, y_true_cnt, y_true_sz = y_true
             # Open a GradientTape to record the operations run
             # during the forward pass, which enables auto-differentiation.
             with tf.GradientTape() as tape:
@@ -109,10 +113,14 @@ class Trainer(object):
                 # The operations that the layer applies
                 # to its inputs are going to be recorded
                 # on the GradientTape.
-                y_pred = self.model(x, training=True)
+                y_pred_h, y_pred_cnt, y_pred_s = self.model(x, training=True)
 
                 # Compute the loss value for this minibatch.
-                loss = self.loss_mse(y_pred, y_true)
+                loss_h = self.loss_mse(y_true_h, y_pred_h)
+                loss_cnt = self.loss_mse(y_true_cnt, y_pred_cnt)
+                loss_s = self.loss_mse(y_true_sz, y_pred_s)
+
+                loss = loss_h + loss_cnt + loss_s
 
                 # Use the gradient tape to automatically retrieve
                 # the gradients of the trainable variables with respect to the loss.
@@ -123,6 +131,31 @@ class Trainer(object):
                 self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
 
             self.train_losses.append(loss)
+
+            if step == 0:
+                hm = y_pred_h.numpy()
+                hm = torch.nn.functional.max_pool2d(hm, kernel_size=5, padding=2, stride=1)
+                hm[hm <= 0.7] = 0.0
+                hm[hm > 1.0] = 1.0
+                hm *= 255
+
+                to_show = []
+                x = x.cpu().numpy().transpose(0, 2, 3, 1)
+                for i, hi in enumerate(hm.squeeze().cpu().numpy().astype(np.uint8)):
+                    hii = np.stack([hi, hi, hi], axis=2)
+                    hii = cv2.resize(hii, (self.cnf.input_shape[0], self.cnf.input_shape[0]))
+
+                    hii = cv2.applyColorMap(hii, cv2.COLORMAP_JET)
+
+                    hii = cv2.addWeighted((x[i] * 255).astype(np.uint8), 0.6, hii, 0.4, 0)
+
+                    to_show.append(np.asarray(hii, dtype=np.float32) / 255.0)
+
+                to_show = torch.from_numpy(np.asarray(to_show, dtype=np.float32).transpose(0, 3, 1, 2))
+                grid = tv.utils.make_grid(to_show, normalize=True, range=(0, 1), nrow=x.shape[0])
+                grid = (grid.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
+                tf.summary.image(name=f'results_{step}', data=grid, step=self.epoch)
+                self.sw.flush()
 
             # print an incredible progress bar
             times.append(time() - t)
@@ -152,9 +185,12 @@ class Trainer(object):
         with self.sw.as_default():
             for step, sample in enumerate(self.test_loader):
                 x, y_true = sample
-                y_pred = self.model(x, training=False)
+                y_true_h, y_true_cnt, y_true_sz = y_true
+                y_pred_h, y_pred_cnt, y_pred_s = self.model(x, training=False)
 
-                self.test_mse_metric.update_state(y_true, y_pred)
+                self.test_h_mse_metric.update_state(y_true_h, y_pred_h)
+                self.test_cnt_mse_metric.update_state(y_true_cnt, y_pred_cnt)
+                self.test_s_mse_metric.update_state(y_true_sz, y_pred_s)
 
                 # draw results for this step in a 3 rows grid:
                 # row #1: input (x)
@@ -162,21 +198,36 @@ class Trainer(object):
                 # row #3: target (y_true)
 
                 if step == 0:
-                    x_np_ = (x[0].copy() * 255).astype(np.uint8)
-                    y_pred_np_ = y_pred[0].numpy()
-                    cv2.normalize(y_pred_np_,y_pred_np_,0,255,cv2.NORM_MINMAX)
-                    y_pred_np_ = np.array(y_pred_np_, dtype=np.uint8)
-                    y_true_np_ = (y_true[0].copy()  * 255).astype(np.uint8)
-                    x_np_ = np.expand_dims(cv2.resize(cv2.cvtColor(x_np_, cv2.COLOR_RGB2GRAY), (y_pred_np_.shape[1], y_pred_np_.shape[0])),2)
-                    grid = np.expand_dims(np.hstack([x_np_, y_pred_np_, y_true_np_]),0)
+                    hm = torch.nn.functional.max_pool2d(hm, kernel_size=5, padding=2, stride=1)
+                    hm[hm <= 0.7] = 0.0
+                    hm[hm > 1.0] = 1.0
+                    hm *= 255
+
+                    to_show = []
+                    x = x.cpu().numpy().transpose(0, 2, 3, 1)
+                    for i, hi in enumerate(hm.squeeze().cpu().numpy().astype(np.uint8)):
+                        hii = np.stack([hi, hi, hi], axis=2)
+                        hii = cv2.resize(hii, (self.cnf.input_shape[0], self.cnf.input_shape[0]))
+
+                        hii = cv2.applyColorMap(hii, cv2.COLORMAP_JET)
+
+                        hii = cv2.addWeighted((x[i] * 255).astype(np.uint8), 0.6, hii, 0.4, 0)
+
+                        to_show.append(np.asarray(hii, dtype=np.float32) / 255.0)
+
+                    to_show = torch.from_numpy(np.asarray(to_show, dtype=np.float32).transpose(0, 3, 1, 2))
+                    grid = tv.utils.make_grid(to_show, normalize=True, range=(0, 1), nrow=x.shape[0])
+                    grid = (grid.cpu().numpy() * 255).astype(np.uint8).transpose(1,2,0)
                     tf.summary.image(name=f'results_{step}', data=grid, step=self.epoch)
                     self.sw.flush()
 
             # log average loss on test set
-            mean_test_mse = self.test_mse_metric.result()
+            mean_test_mse = (self.test_h_mse_metric.result() + self.test_cnt_mse_metric.result() + self.test_s_mse_metric.result()) / 3
             print(f'\t● AVG MSE on TEST-set: {mean_test_mse:.6f} │ T: {time() - t:.2f} s')
 
-            tf.summary.scalar(name='test_mse', data=mean_test_mse, step=self.epoch)
+            tf.summary.scalar(name='test_h_mse', data=self.test_h_mse_metric.result(), step=self.epoch)
+            tf.summary.scalar(name='test_cnt_mse', data=self.test_cnt_mse_metric.result(), step=self.epoch)
+            tf.summary.scalar(name='test_s_mse', data=self.test_s_mse_metric.result(), step=self.epoch)
             self.sw.flush()
 
             # save best model

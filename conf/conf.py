@@ -40,8 +40,8 @@ class Conf(object):
     CAPRA_PATH = Path('/nas/softechict-nas-3/rgasparini')
 
 
-    def __init__(self, conf_file_path=None, seed=None, exp_name=None, log=True):
-        # type: (str, int, str, bool) -> None
+    def __init__(self, conf_file_path=None, exp_name=None, log=True):
+        # type: (str, str, bool) -> None
         """
         :param conf_file_path: optional path of the configuration file
         :param seed: desired seed for the RNG; if `None`, it will be chosen randomly
@@ -62,9 +62,6 @@ class Conf(object):
         self.project_log_path = Path('./log')  # alternative: Path(Conf.CAPRA_PATH / 'log' / self.project_name)
         self.exp_log_path = self.project_log_path / exp_name
         self.exp_weights_path = self.exp_log_path / 'weights'
-
-        # set random seed
-        self.seed = set_seed(seed)  # type: int
 
         self.keys_to_hide = list(self.__dict__.keys()) + ['keys_to_hide']
 
@@ -87,8 +84,10 @@ class Conf(object):
         self.epochs = y.get('EPOCHS', 10)  # type: int
         self.n_workers = y.get('N_WORKERS', 4)  # type: int
         self.batch_size = y.get('BATCH_SIZE', 8)  # type: int
-        self.model_max_pred = y.get('MODEL_MAX_PRED', 64)  # type: int
-
+        self.stride = y.get('STRIDE', 4)  # type: int
+        self.model = y.get('MODEL', "mobilenet")  # type: str
+        seed = y.get('SEED', None)  # type: int
+        self.seed = set_seed(seed)  # type: int
         default_device = 'cuda'
         self.device = y.get('DEVICE', default_device)  # type: str
 

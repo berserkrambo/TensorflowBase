@@ -1,21 +1,21 @@
 # learning rate
-LR: 0.0001
+LR: 0.001
 
 EPOCHS: 50
 DEVICE: cuda
-N_WORKERS: 2
-BATCH_SIZE: 96
+N_WORKERS: 4
+BATCH_SIZE: 32
 SEED: 303
 
 # dataset path
-DS_PATH: F:\Progetti\Datasets\cat_dog
+DS_PATH: /nas/softechict-nas-3/rgasparini/datasets/widerface
 
 # network input shape as keras channel last ordering separated by ',' , data input will be resized to that shape proportionally and keeping the original AR
-INPUT_SHAPE: 512,512,3
+INPUT_SHAPE: 352,352,3
 
 SRTIDE: 4
 
-MODEL: resnet
+MODEL: mobilenet
 
 # convert to tflite [True, False]
 EXPORT_TFLITE: True

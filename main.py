@@ -38,7 +38,7 @@ def main(exp_name, conf_file_path, seed):
         seed = int(split[1])
         exp_name = split[0]
 
-    cnf = Conf(conf_file_path=conf_file_path, seed=seed, exp_name=exp_name, log=log_each_step)
+    cnf = Conf(conf_file_path=conf_file_path, exp_name=exp_name, log=log_each_step)
     print(f'\n{cnf}')
 
     print(f'\n▶ Starting Experiment \'{exp_name}\' [seed: {cnf.seed}]')
