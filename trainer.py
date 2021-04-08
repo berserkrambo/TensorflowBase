@@ -4,7 +4,7 @@
 
 from conf import Conf
 from dataset.widerface import DataGenerator
-from models.model import get_MobileCenterModel
+from models.model import get_model
 
 import tensorflow as tf
 from tensorflow import keras
@@ -15,11 +15,13 @@ import cv2
 import torch
 import torchvision as tv
 
+
 class Trainer(object):
 
     def __init__(self, cnf):
         # type: (Conf) -> Trainer
-
+        physical_devices = tf.config.list_physical_devices('GPU')
+        tf.config.experimental.set_memory_growth(physical_devices[0], True)
         self.cnf = cnf
 
         # init train loader
@@ -27,7 +29,7 @@ class Trainer(object):
         self.test_loader = DataGenerator(self.cnf, partition='test', shuffle=False)
 
         # init model
-        self.model = get_MobileCenterModel(input_shape=self.cnf.input_shape)
+        self.model = get_model(input_shape=self.cnf.input_shape, model_str=self.cnf.model)
 
         # init optimizer
         self.optimizer = keras.optimizers.Adam(learning_rate=self.cnf.lr)
@@ -58,7 +60,6 @@ class Trainer(object):
         print(f'tensorboard --logdir={cnf.project_log_path.abspath()}\n')
         self.sw = tf.summary.create_file_writer(self.log_path)
         self.log_freq = len(self.train_loader)
-        self.train_losses = []
 
         # starting values
         self.epoch = 0
@@ -69,7 +70,11 @@ class Trainer(object):
 
         # possibly load checkpoint
         self.load_ck()
+        self.reset_metric()
 
+    def reset_metric(self):
+        self.train_losses = {"mse_c": [], "mse_s": [], "mse_cnt": [], "total": []}
+        self.test_losses = {"mse_c": [], "mse_s": [], "mse_cnt": [], "total": []}
 
     def load_ck(self):
         """
@@ -88,7 +93,6 @@ class Trainer(object):
         save_path = self.cnf.exp_weights_path if save_opt else self.cnf.exp_weights_path / "best"
         keras.models.save_model(self.model, save_path, include_optimizer=save_opt)
 
-
     def train(self):
         """
         train model for one epoch on the Training-Set.
@@ -101,6 +105,8 @@ class Trainer(object):
         start_time = time()
         times = []
         # self.train_loader.on_epoch_end()
+        stop = self.train_loader.__len__() - 1
+
         for step, sample in enumerate(self.train_loader):
             t = time()
 
@@ -130,18 +136,21 @@ class Trainer(object):
                 # the value of the variables to minimize the loss.
                 self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
 
-            self.train_losses.append(loss)
+            self.train_losses["mse_c"].append(loss_h)
+            self.train_losses["mse_s"].append(loss_s)
+            self.train_losses["mse_cnt"].append(loss_cnt)
+            self.train_losses["total"].append(loss)
 
-            if step == 0:
-                hm = y_pred_h.numpy()
+            if step == stop:
+                hm = torch.from_numpy(y_pred_h.numpy())
                 hm = torch.nn.functional.max_pool2d(hm, kernel_size=5, padding=2, stride=1)
+                hm = hm.numpy()
                 hm[hm <= 0.7] = 0.0
                 hm[hm > 1.0] = 1.0
                 hm *= 255
 
                 to_show = []
-                x = x.cpu().numpy().transpose(0, 2, 3, 1)
-                for i, hi in enumerate(hm.squeeze().cpu().numpy().astype(np.uint8)):
+                for i, hi in enumerate(hm.squeeze().astype(np.uint8)):
                     hii = np.stack([hi, hi, hi], axis=2)
                     hii = cv2.resize(hii, (self.cnf.input_shape[0], self.cnf.input_shape[0]))
 
@@ -153,28 +162,30 @@ class Trainer(object):
 
                 to_show = torch.from_numpy(np.asarray(to_show, dtype=np.float32).transpose(0, 3, 1, 2))
                 grid = tv.utils.make_grid(to_show, normalize=True, range=(0, 1), nrow=x.shape[0])
-                grid = (grid.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
-                tf.summary.image(name=f'results_{step}', data=grid, step=self.epoch)
-                self.sw.flush()
+                grid = np.expand_dims((grid.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0), axis=0)
+                with self.sw.as_default():
+                    tf.summary.image(name=f'results_train', data=grid, step=self.epoch)
+                    self.sw.flush()
 
             # print an incredible progress bar
             times.append(time() - t)
             if self.cnf.log_each_step or (not self.cnf.log_each_step and self.progress_bar.progress == 1):
                 print(f'\r{self.progress_bar} '
-                      f'│ Loss: {np.mean(self.train_losses):.6f} '
+                      f'│ Loss: {np.mean(self.train_losses["total"]):.6f} '
                       f'│ ↯: {1 / np.mean(times):5.2f} step/s', end='')
             self.progress_bar.inc()
 
         # log average loss of this epoch
-        mean_epoch_loss = np.mean(self.train_losses)
         with self.sw.as_default():
-            tf.summary.scalar(name='train_loss', data=mean_epoch_loss, step=self.epoch)
+            tf.summary.scalar(name='train_loss', data=np.mean(self.train_losses["total"]), step=self.epoch)
+            tf.summary.scalar(name='train_mse_c', data=np.mean(self.train_losses["mse_c"]), step=self.epoch)
+            tf.summary.scalar(name='train_mse_s', data=np.mean(self.train_losses["mse_s"]), step=self.epoch)
+            tf.summary.scalar(name='train_mse_cnt', data=np.mean(self.train_losses["mse_cnt"]), step=self.epoch)
             self.sw.flush()
-        self.train_losses = []
+        self.reset_metric()
 
         # log epoch duration
         print(f' │ T: {time() - start_time:.2f} s')
-
 
     def test(self):
         """
@@ -183,6 +194,8 @@ class Trainer(object):
 
         t = time()
         with self.sw.as_default():
+            stop = self.test_loader.__len__() - 1
+
             for step, sample in enumerate(self.test_loader):
                 x, y_true = sample
                 y_true_h, y_true_cnt, y_true_sz = y_true
@@ -197,15 +210,16 @@ class Trainer(object):
                 # row #2: predicted_output (y_pred)
                 # row #3: target (y_true)
 
-                if step == 0:
+                if step == stop:
+                    hm = torch.from_numpy(y_pred_h.numpy())
                     hm = torch.nn.functional.max_pool2d(hm, kernel_size=5, padding=2, stride=1)
+                    hm = hm.numpy()
                     hm[hm <= 0.7] = 0.0
                     hm[hm > 1.0] = 1.0
                     hm *= 255
 
                     to_show = []
-                    x = x.cpu().numpy().transpose(0, 2, 3, 1)
-                    for i, hi in enumerate(hm.squeeze().cpu().numpy().astype(np.uint8)):
+                    for i, hi in enumerate(hm.squeeze().astype(np.uint8)):
                         hii = np.stack([hi, hi, hi], axis=2)
                         hii = cv2.resize(hii, (self.cnf.input_shape[0], self.cnf.input_shape[0]))
 
@@ -217,18 +231,21 @@ class Trainer(object):
 
                     to_show = torch.from_numpy(np.asarray(to_show, dtype=np.float32).transpose(0, 3, 1, 2))
                     grid = tv.utils.make_grid(to_show, normalize=True, range=(0, 1), nrow=x.shape[0])
-                    grid = (grid.cpu().numpy() * 255).astype(np.uint8).transpose(1,2,0)
-                    tf.summary.image(name=f'results_{step}', data=grid, step=self.epoch)
-                    self.sw.flush()
+                    grid = np.expand_dims((grid.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0), axis=0)
+                    with self.sw.as_default():
+                        tf.summary.image(name=f'results_test', data=grid, step=self.epoch)
+                        self.sw.flush()
 
             # log average loss on test set
-            mean_test_mse = (self.test_h_mse_metric.result() + self.test_cnt_mse_metric.result() + self.test_s_mse_metric.result()) / 3
+            mean_test_mse = self.test_h_mse_metric.result() + self.test_cnt_mse_metric.result() + self.test_s_mse_metric.result()
             print(f'\t● AVG MSE on TEST-set: {mean_test_mse:.6f} │ T: {time() - t:.2f} s')
 
-            tf.summary.scalar(name='test_h_mse', data=self.test_h_mse_metric.result(), step=self.epoch)
-            tf.summary.scalar(name='test_cnt_mse', data=self.test_cnt_mse_metric.result(), step=self.epoch)
-            tf.summary.scalar(name='test_s_mse', data=self.test_s_mse_metric.result(), step=self.epoch)
-            self.sw.flush()
+            with self.sw.as_default():
+                tf.summary.scalar(name='test_h_mse', data=self.test_h_mse_metric.result(), step=self.epoch)
+                tf.summary.scalar(name='test_cnt_mse', data=self.test_cnt_mse_metric.result(), step=self.epoch)
+                tf.summary.scalar(name='test_s_mse', data=self.test_s_mse_metric.result(), step=self.epoch)
+                tf.summary.scalar(name='test_loss', data=mean_test_mse, step=self.epoch)
+                self.sw.flush()
 
             # save best model
             if self.best_test_loss is None or mean_test_mse < self.best_test_loss:
@@ -244,7 +261,7 @@ class Trainer(object):
 
             # Convert the model.
             converter = tf.lite.TFLiteConverter.from_saved_model(self.cnf.exp_weights_path)
-            converter.optimizations = [tf.lite.Optimize.DEFAULT] # quant 8 bit
+            converter.optimizations = [tf.lite.Optimize.DEFAULT]  # quant 8 bit
 
             def representative_dataset_gen():
                 img_list = []
@@ -266,11 +283,8 @@ class Trainer(object):
 
             self.cnf.tflite_model_outpath.makedirs_p()
 
-            with tf.io.gfile.GFile(self.cnf.tflite_model_outpath /'model.tflite', 'wb') as f:
+            with tf.io.gfile.GFile(self.cnf.tflite_model_outpath / 'model.tflite', 'wb') as f:
                 f.write(tflite_model)
-
-
-
 
     def run(self):
         """

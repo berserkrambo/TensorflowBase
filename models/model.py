@@ -1,31 +1,33 @@
-# -*- coding: utf-8 -*-
-# ---------------------
-
 from tensorflow import keras
+from tf2_resnets import models
 
 
-def get_MobileCenterModel(input_shape):
+def get_model(input_shape, model_str):
+    if model_str == "mobilenet":
+        base_model = keras.applications.MobileNetV2(
+            input_shape=input_shape,
+            alpha=1.0,
+            include_top=False,
+            weights="imagenet",
+        )
+    elif model_str == "resnet":
+        base_model = models.ResNet18(input_shape=input_shape, weights='imagenet', include_top=False)
 
-    base_model = keras.applications.MobileNetV2(
-    input_shape=input_shape,
-    alpha=1.0,
-    include_top=False,
-    weights="imagenet",
-    )
-
-    x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(base_model.output)
+    x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(
+        base_model.output)
     x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(x)
     x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(x)
 
     # heatmap prediction
     hm = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(x)
     hm = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(hm)
-    hm = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1,1), activation=None, name='hm')(hm)
+    hm = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='hm')(hm)
 
     # center prediction
     hm_c = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(x)
     hm_c = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(hm_c)
-    hm_c = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='hm_c')(hm_c)
+    hm_c = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='hm_c')(
+        hm_c)
 
     # size prediction
     s = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(x)
@@ -36,32 +38,7 @@ def get_MobileCenterModel(input_shape):
 
     return model
 
-
-def get_DummyModel(input_shape):
-
-    inputs = keras.Input(input_shape)
-
-    # >> downsample blocks
-    x = keras.layers.Conv2D(filters=32, kernel_size=3, padding='same', strides=(2, 2), activation='relu')(inputs)
-    x = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', strides=(2, 2), activation='relu')(x)
-    x = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', strides=(2, 2), activation='relu')(x)
-    x = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', strides=(2, 2), activation='relu')(x)
-    x = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', strides=(2, 2), activation='relu')(x)
-    x = keras.layers.Conv2D(filters=32, kernel_size=3, padding='same', strides=(1, 1), activation='relu')(x)
-
-    # >> bottleneck
-    x = keras.layers.Flatten(input_shape=(7, 7))(x)
-    x = keras.layers.Dense(512, activation='relu')(x)
-
-    outputs = keras.layers.Dense(2, activation='softmax')(x)
-
-    model = keras.Model(inputs=inputs, outputs=outputs)
-
-    return model
-
-
 if __name__ == '__main__':
     input_shape = (352,352,3)
-    model = get_MobileCenterModel(input_shape)
+    model = get_model(input_shape, "mobilenet")
     model.summary()
-
