@@ -2,7 +2,7 @@ from tensorflow import keras
 from tf2_resnets import models
 
 
-def get_model(input_shape, model_str):
+def get_model(input_shape, model_str, hm_ch):
     if model_str == "mobilenet":
         base_model = keras.applications.MobileNetV2(
             input_shape=input_shape,
@@ -21,7 +21,7 @@ def get_model(input_shape, model_str):
     # heatmap prediction
     hm = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(x)
     hm = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(hm)
-    hm = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='hm')(hm)
+    hm = keras.layers.Conv2D(filters=1, kernel_size=hm_ch, padding='same', strides=(1, 1), activation=None, name='hm')(hm)
 
     # size prediction
     s = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(x)

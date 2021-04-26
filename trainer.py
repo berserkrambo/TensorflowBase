@@ -49,7 +49,7 @@ class Trainer(object):
         )
 
         # init model
-        self.model = get_model(input_shape=self.cnf.input_shape, model_str=self.cnf.model)
+        self.model = get_model(input_shape=self.cnf.input_shape, model_str=self.cnf.model, hm_ch=2 if self.cnf.ds_classify else 1)
 
         # init optimizer
         self.optimizer = keras.optimizers.Adam(learning_rate=self.cnf.lr)
