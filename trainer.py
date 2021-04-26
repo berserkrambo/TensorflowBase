@@ -300,7 +300,7 @@ class Trainer(object):
     def get_grid_view(self, x, hm, sz):
         x_np = (x * 255).astype(np.uint8)
         hm, sz = hm.numpy(), sz.numpy().squeeze()
-        hm = torch.from_numpy(hm.transpose(0, 3, 2, 1))
+        hm = torch.from_numpy(hm.transpose(0, 3, 1, 2))
         to_show = []
 
         # simple nms
