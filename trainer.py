@@ -91,6 +91,7 @@ class Trainer(object):
         # possibly load checkpoint
         self.load_ck()
         self.reset_metric()
+        self.best_epoc = 0
 
     def reset_metric(self):
         self.train_losses = {"mse_c": [], "mse_s": [], "mse_cnt": [], "total": []}
@@ -205,6 +206,7 @@ class Trainer(object):
             tf.summary.scalar(name='train_mse_s', data=np.mean(self.train_losses["mse_s"]), step=self.epoch)
             # tf.summary.scalar(name='train_mse_cnt', data=np.mean(self.train_losses["mse_cnt"]), step=self.epoch)
             self.sw.flush()
+
         self.reset_metric()
 
         # log epoch duration
@@ -258,8 +260,11 @@ class Trainer(object):
                 tf.summary.scalar(name='test_loss', data=mean_test_mse, step=self.epoch)
                 self.sw.flush()
 
+            self.reset_metric()
+
             # save best model
             if self.best_test_loss is None or mean_test_mse < self.best_test_loss:
+                self.best_epoc = self.epoch
                 self.best_test_loss = mean_test_mse
                 self.save_ck(save_opt=False)
 
@@ -355,11 +360,10 @@ class Trainer(object):
         """
         for _ in range(self.epoch, self.cnf.epochs):
             self.train()
-
             self.test()
+            self.save_ck()
 
             self.epoch += 1
-            self.save_ck()
 
         if self.cnf.export_tflite:
             self.export_tflite()
