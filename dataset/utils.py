@@ -14,7 +14,7 @@ def scale_coords(coords, meta):
     return coords
 
 def letterbox(img, new_shape=(416, 416), color=(128, 128, 128),
-              auto=True, scaleFill=False, scaleup=True, interp=cv2.INTER_AREA):
+              auto=True, scaleFill=False, scaleup=True):
     # Resize image to a 32-pixel-multiple rectangle https://github.com/ultralytics/yolov3/issues/232
     shape = img.shape[:2]  # current shape [height, width]
     if isinstance(new_shape, int):
@@ -40,6 +40,7 @@ def letterbox(img, new_shape=(416, 416), color=(128, 128, 128),
     dh /= 2
 
     if shape[::-1] != new_unpad:  # resize
+        interp = cv2.INTER_AREA if r <= 1 else cv2.INTER_CUBIC
         img = cv2.resize(img, new_unpad, interpolation=interp)  # INTER_AREA is better, INTER_LINEAR is faster
     top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))

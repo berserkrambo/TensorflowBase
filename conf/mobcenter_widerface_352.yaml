@@ -1,14 +1,18 @@
 # learning rate
 LR: 0.001
 
-EPOCHS: 50
+EPOCHS: 200
 DEVICE: cuda
-N_WORKERS: 4
-BATCH_SIZE: 32
+N_WORKERS: 6
+BATCH_SIZE: 64
 SEED: 303
 
 # dataset path
-DS_PATH: /nas/softechict-nas-3/rgasparini/datasets/widerface
+DS_PATHS:
+  widerface: /nas/softechict-nas-3/rgasparini/datasets/widerface
+  face_mask: /nas/softechict-nas-3/rgasparini/datasets/face_mask_dataset
+
+DS_CLASSIFY: 0
 
 # network input shape as keras channel last ordering separated by ',' , data input will be resized to that shape proportionally and keeping the original AR
 INPUT_SHAPE: 352,352,3

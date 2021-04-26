@@ -14,6 +14,8 @@ import numpy as np
 import cv2
 import torch
 import torchvision as tv
+from torch.utils.data import DataLoader
+from dataset.dataset import Data
 
 
 class Trainer(object):
@@ -25,8 +27,25 @@ class Trainer(object):
         self.cnf = cnf
 
         # init train loader
-        self.train_loader = DataGenerator(self.cnf, partition='train', shuffle=True)
-        self.test_loader = DataGenerator(self.cnf, partition='test', shuffle=False)
+        # self.train_loader = DataGenerator(self.cnf, partition='train', shuffle=True)
+        # self.test_loader = DataGenerator(self.cnf, partition='test', shuffle=False)
+
+        # init train loader
+        def asd(worker_id):
+            return np.random.seed(worker_id)
+
+        training_set = Data(cnf, partition='train')
+        self.train_loader = DataLoader(
+            dataset=training_set, batch_size=cnf.batch_size,
+            num_workers=cnf.n_workers, shuffle=True, pin_memory=True, worker_init_fn=asd, drop_last=True
+        )
+
+        # init test loader
+        test_set = Data(cnf, partition='test')
+        self.test_loader = DataLoader(
+            dataset=test_set, batch_size=cnf.batch_size,
+            num_workers=cnf.n_workers, shuffle=False, drop_last=True
+        )
 
         # init model
         self.model = get_model(input_shape=self.cnf.input_shape, model_str=self.cnf.model)
@@ -40,7 +59,7 @@ class Trainer(object):
 
         # init metrics
         self.test_h_mse_metric = keras.metrics.MeanSquaredError()
-        self.test_cnt_mse_metric = keras.metrics.MeanSquaredError()
+        # self.test_cnt_mse_metric = keras.metrics.MeanSquaredError()
         self.test_s_mse_metric = keras.metrics.MeanSquaredError()
 
         # compile the model
@@ -110,8 +129,10 @@ class Trainer(object):
         for step, sample in enumerate(self.train_loader):
             t = time()
 
-            x, y_true = sample
-            y_true_h, y_true_cnt, y_true_sz = y_true
+            x, y_true, meta = sample
+            x = x.numpy().transpose(0,2,3,1)
+            # meta = meta.numpy().transpose(0,2,3,1)
+            y_true_h, y_true_sz = y_true[0].numpy().transpose(0,2,3,1), y_true[1].numpy()
             # Open a GradientTape to record the operations run
             # during the forward pass, which enables auto-differentiation.
             with tf.GradientTape() as tape:
@@ -119,14 +140,14 @@ class Trainer(object):
                 # The operations that the layer applies
                 # to its inputs are going to be recorded
                 # on the GradientTape.
-                y_pred_h, y_pred_cnt, y_pred_s = self.model(x, training=True)
+                y_pred_h, y_pred_s = self.model(x, training=True)
 
                 # Compute the loss value for this minibatch.
                 loss_h = self.loss_mse(y_true_h, y_pred_h)
-                loss_cnt = self.loss_mse(y_true_cnt, y_pred_cnt)
+                # loss_cnt = self.loss_mse(y_true_cnt, y_pred_cnt)
                 loss_s = self.loss_mse(y_true_sz, y_pred_s)
 
-                loss = loss_h + loss_cnt + loss_s
+                loss = loss_h + loss_s
 
                 # Use the gradient tape to automatically retrieve
                 # the gradients of the trainable variables with respect to the loss.
@@ -138,7 +159,7 @@ class Trainer(object):
 
             self.train_losses["mse_c"].append(loss_h)
             self.train_losses["mse_s"].append(loss_s)
-            self.train_losses["mse_cnt"].append(loss_cnt)
+            # self.train_losses["mse_cnt"].append(loss_cnt)
             self.train_losses["total"].append(loss)
 
             if step == stop:
@@ -178,7 +199,7 @@ class Trainer(object):
         # log average loss of this epoch
         with self.sw.as_default():
             tf.summary.scalar(name='train_loss', data=np.mean(self.train_losses["total"]), step=self.epoch)
-            tf.summary.scalar(name='train_mse_c', data=np.mean(self.train_losses["mse_c"]), step=self.epoch)
+            # tf.summary.scalar(name='train_mse_c', data=np.mean(self.train_losses["mse_c"]), step=self.epoch)
             tf.summary.scalar(name='train_mse_s', data=np.mean(self.train_losses["mse_s"]), step=self.epoch)
             tf.summary.scalar(name='train_mse_cnt', data=np.mean(self.train_losses["mse_cnt"]), step=self.epoch)
             self.sw.flush()
@@ -197,12 +218,14 @@ class Trainer(object):
             stop = self.test_loader.__len__() - 1
 
             for step, sample in enumerate(self.test_loader):
-                x, y_true = sample
-                y_true_h, y_true_cnt, y_true_sz = y_true
-                y_pred_h, y_pred_cnt, y_pred_s = self.model(x, training=False)
+                x, y_true, meta = sample
+                x = x.numpy().transpose(0, 2, 3, 1)
+                # meta = meta.numpy().transpose(0,2,3,1)
+                y_true_h, y_true_sz = y_true[0].numpy().transpose(0, 2, 3, 1), y_true[1].numpy()
+                y_pred_h, y_pred_s = self.model(x, training=False)
 
                 self.test_h_mse_metric.update_state(y_true_h, y_pred_h)
-                self.test_cnt_mse_metric.update_state(y_true_cnt, y_pred_cnt)
+                # self.test_cnt_mse_metric.update_state(y_true_cnt, y_pred_cnt)
                 self.test_s_mse_metric.update_state(y_true_sz, y_pred_s)
 
                 # draw results for this step in a 3 rows grid:
@@ -237,12 +260,12 @@ class Trainer(object):
                         self.sw.flush()
 
             # log average loss on test set
-            mean_test_mse = self.test_h_mse_metric.result() + self.test_cnt_mse_metric.result() + self.test_s_mse_metric.result()
+            mean_test_mse = self.test_h_mse_metric.result() + self.test_s_mse_metric.result()
             print(f'\t● AVG MSE on TEST-set: {mean_test_mse:.6f} │ T: {time() - t:.2f} s')
 
             with self.sw.as_default():
                 tf.summary.scalar(name='test_h_mse', data=self.test_h_mse_metric.result(), step=self.epoch)
-                tf.summary.scalar(name='test_cnt_mse', data=self.test_cnt_mse_metric.result(), step=self.epoch)
+                # tf.summary.scalar(name='test_cnt_mse', data=self.test_cnt_mse_metric.result(), step=self.epoch)
                 tf.summary.scalar(name='test_s_mse', data=self.test_s_mse_metric.result(), step=self.epoch)
                 tf.summary.scalar(name='test_loss', data=mean_test_mse, step=self.epoch)
                 self.sw.flush()
@@ -285,6 +308,55 @@ class Trainer(object):
 
             with tf.io.gfile.GFile(self.cnf.tflite_model_outpath / 'model.tflite', 'wb') as f:
                 f.write(tflite_model)
+
+    def get_grid_view(self, x, hm, sz):
+        x_np = (x * 255).cpu().numpy().transpose(0, 2, 3, 1).astype(np.uint8)
+        hm, sz  = hm.detach(), sz.detach()
+        to_show = []
+
+        # simple nms
+        hmax = torch.nn.functional.max_pool2d(hm, kernel_size=5, padding=2, stride=1)
+        keep = (hmax == hm).float()
+        hm *= keep
+
+        for bi in range(len(x_np)):
+            hm_np = hm[bi].cpu().numpy()
+            sz_np = sz[bi].squeeze().cpu().numpy()
+
+            xi = x_np[bi].copy()
+            for chi in range(0, self.cnf.ds_classify + 1):
+                ind = np.argpartition(hm_np[chi].squeeze().flatten(), -88)[-88:]
+
+                # out = np.zeros(shape=(self.cnf.input_shape[0], self.cnf.input_shape[1], 3 ), dtype=np.uint8)
+                for v in ind:
+                    row = v % hm_np[chi].shape[0]
+                    col = v // hm_np[chi].shape[0]
+
+                    if hm_np[chi][col, row] <= 0.1:
+                        continue
+                    szi = int(sz_np[col, row] * self.cnf.input_shape[0])
+
+                    row *= self.cnf.stride
+                    col *= self.cnf.stride
+                    szi = szi // 2
+                    x1, y1, x2, y2 = row - szi, col - szi, row + szi, col + szi
+                    if x1 < 0:
+                        x1 = 0
+                    if y1 < 0:
+                        y1 = 0
+                    if x2 >= self.cnf.input_shape[0]:
+                        x2 = self.cnf.input_shape[0] - 1
+                    if y2 >= self.cnf.input_shape[1]:
+                        y2 = self.cnf.input_shape[1] - 1
+
+                    cv2.rectangle(xi, (x1, y1), (x2, y2), (255*(1-chi), 0, 255*chi), 2)
+                # out = cv2.applyColorMap(out, cv2.COLORMAP_JET)
+                # out = cv2.addWeighted((x_np[bi] * 255).astype(np.uint8), 0.6, out, 0.4, 0)
+
+            to_show.append(np.asarray(xi, dtype=np.float32) / 255.0)
+        to_show = torch.from_numpy(np.asarray(to_show, dtype=np.float32).transpose(0, 3, 1, 2))
+        grid = tv.utils.make_grid(to_show, normalize=True, range=(0, 1), nrow=x.shape[0])
+        return grid
 
     def run(self):
         """

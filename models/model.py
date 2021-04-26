@@ -23,22 +23,16 @@ def get_model(input_shape, model_str):
     hm = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(hm)
     hm = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='hm')(hm)
 
-    # center prediction
-    hm_c = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(x)
-    hm_c = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(hm_c)
-    hm_c = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='hm_c')(
-        hm_c)
-
     # size prediction
     s = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(x)
     s = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(s)
     s = keras.layers.Conv2D(filters=1, kernel_size=1, padding='same', strides=(1, 1), activation=None, name='s')(s)
 
-    model = keras.Model(inputs=base_model.input, outputs=[hm, hm_c, s])
+    model = keras.Model(inputs=base_model.input, outputs=[hm, s])
 
     return model
 
 if __name__ == '__main__':
     input_shape = (352,352,3)
-    model = get_model(input_shape, "mobilenet")
+    model = get_model(input_shape, "resnet")
     model.summary()

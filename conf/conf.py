@@ -91,8 +91,13 @@ class Conf(object):
         default_device = 'cuda'
         self.device = y.get('DEVICE', default_device)  # type: str
 
-        self.ds_path = y.get('DS_PATH','.') # type: str
-        self.ds_path = Path(self.ds_path)
+        ds_path = y.get('DS_PATHS', '.')  # type: dict
+        self.ds_path = {}
+        for k, v in ds_path.items():
+            self.ds_path[k] = Path(v)
+
+        self.ds_classify = y.get("DS_CLASSIFY", 0)  # type: int
+        assert self.ds_classify in [0, 1], "ds_classify has to be 0 or 1"
 
         self.input_shape = y.get('INPUT_SHAPE', (64,64,3))  # type: str
         self.input_shape = tuple([int(i) for i in self.input_shape.split(',')])
