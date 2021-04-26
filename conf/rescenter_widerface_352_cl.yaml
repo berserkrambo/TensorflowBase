@@ -12,7 +12,7 @@ DS_PATHS:
   widerface: /nas/softechict-nas-3/rgasparini/datasets/widerface
   face_mask: /nas/softechict-nas-3/rgasparini/datasets/face_mask_dataset
 
-DS_CLASSIFY: 1
+DS_CLASSIFY: 0
 
 # network input shape as keras channel last ordering separated by ',' , data input will be resized to that shape proportionally and keeping the original AR
 INPUT_SHAPE: 352,352,3
