@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 from dataset.dataset import Data
 
 
+
 class Trainer(object):
 
     def __init__(self, cnf):
@@ -54,7 +55,7 @@ class Trainer(object):
         self.optimizer = keras.optimizers.Adam(learning_rate=self.cnf.lr)
 
         # init loss
-        self.loss_mse = tf.keras.losses.MeanSquaredError()
+        # self.loss_mse = tf.keras.losses.MeanSquaredError()
         # self.loss_mae = tf.keras.losses.MeanAbsoluteError()
 
         # init metrics
@@ -112,6 +113,27 @@ class Trainer(object):
         save_path = self.cnf.exp_weights_path if save_opt else self.cnf.exp_weights_path / "best"
         keras.models.save_model(self.model, save_path, include_optimizer=save_opt)
 
+    def mse(self, y_true, y_pred, mask=None):
+        y_pred = tf.convert_to_tensor(y_pred)
+        y_true = tf.cast(y_true, y_pred.dtype)
+        if mask is None:
+            return tf.reduce_mean(tf.square(y_pred - y_true), axis=-1)
+        else:
+            return tf.reduce_mean(tf.square((y_pred * mask) - (y_true * mask)), axis=-1)
+
+    def compute_loss(self, hm_pred, sz_pred, y_true):
+        hm, sz =  y_true
+        hm = tf.convert_to_tensor(hm)
+        sz = tf.convert_to_tensor(sz)
+        mse_c = self.mse(hm, hm_pred)
+        mask = np.zeros_like(sz.numpy())
+        mask[sz.numpy() > 0] = 1
+        mask = tf.convert_to_tensor(mask)
+        mse_s = self.mse(sz, sz_pred, mask)
+
+        total_loss = mse_s + mse_c
+        return mse_c, mse_s, total_loss
+
     def train(self):
         """
         train model for one epoch on the Training-Set.
@@ -143,11 +165,11 @@ class Trainer(object):
                 y_pred_h, y_pred_s = self.model(x, training=True)
 
                 # Compute the loss value for this minibatch.
-                loss_h = self.loss_mse(y_true_h, y_pred_h)
+                # loss_h = self.loss_mse(y_true_h, y_pred_h)
                 # loss_cnt = self.loss_mse(y_true_cnt, y_pred_cnt)
-                loss_s = self.loss_mse(y_true_sz, y_pred_s)
+                # loss_s = self.loss_mse(y_true_sz, y_pred_s)
 
-                loss = loss_h + loss_s
+                loss_h, loss_s, loss = self.compute_loss(y_pred_h, y_pred_s, [y_true_h, y_true_sz])
 
                 # Use the gradient tape to automatically retrieve
                 # the gradients of the trainable variables with respect to the loss.
@@ -204,9 +226,15 @@ class Trainer(object):
                 y_true_h, y_true_sz = y_true[0].numpy().transpose(0, 2, 3, 1), y_true[1].unsqueeze(3).numpy()
                 y_pred_h, y_pred_s = self.model(x, training=False)
 
-                self.test_h_mse_metric.update_state(y_true_h, y_pred_h)
+                loss_h, loss_s, loss = self.compute_loss(y_pred_h, y_pred_s, [y_true_h, y_true_sz])
+
+                self.test_losses["mse_c"].append(loss_h)
+                self.test_losses["mse_s"].append(loss_s)
+                # self.train_losses["mse_cnt"].append(loss_cnt)
+                self.test_losses["total"].append(loss)
+                # self.test_h_mse_metric.update_state(y_true_h, y_pred_h)
                 # self.test_cnt_mse_metric.update_state(y_true_cnt, y_pred_cnt)
-                self.test_s_mse_metric.update_state(y_true_sz, y_pred_s)
+                # self.test_s_mse_metric.update_state(y_true_sz, y_pred_s)
 
                 # draw results for this step in a 3 rows grid:
                 # row #1: input (x)
@@ -220,13 +248,13 @@ class Trainer(object):
                         self.sw.flush()
 
             # log average loss on test set
-            mean_test_mse = self.test_h_mse_metric.result() + self.test_s_mse_metric.result()
+            mean_test_mse = np.mean(self.test_losses["total"])
             print(f'\t● AVG MSE on TEST-set: {mean_test_mse:.6f} │ T: {time() - t:.2f} s')
 
             with self.sw.as_default():
-                tf.summary.scalar(name='test_h_mse', data=self.test_h_mse_metric.result(), step=self.epoch)
+                tf.summary.scalar(name='test_h_mse', data=np.mean(self.test_losses["mse_c"]), step=self.epoch)
                 # tf.summary.scalar(name='test_cnt_mse', data=self.test_cnt_mse_metric.result(), step=self.epoch)
-                tf.summary.scalar(name='test_s_mse', data=self.test_s_mse_metric.result(), step=self.epoch)
+                tf.summary.scalar(name='test_s_mse', data=np.mean(self.test_losses["mse_s"]), step=self.epoch)
                 tf.summary.scalar(name='test_loss', data=mean_test_mse, step=self.epoch)
                 self.sw.flush()
 
@@ -317,7 +345,8 @@ class Trainer(object):
             to_show.append(np.asarray(xi, dtype=np.float32) / 255.0)
         to_show = torch.from_numpy(np.asarray(to_show, dtype=np.float32).transpose(0, 3, 1, 2))
         grid = tv.utils.make_grid(to_show, normalize=True, range=(0, 1), nrow=x.shape[0])
-        grid = (grid.cpu().numpy() * 255).astype(np.uint8).transpose(1,2,0)
+        grid = grid.unsqueeze(dim=0)
+        grid = (grid.cpu().numpy() * 255).astype(np.uint8).transpose(0,2,3,1)
         return grid
 
     def run(self):

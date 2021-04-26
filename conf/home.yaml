@@ -4,7 +4,7 @@ LR: 0.001
 EPOCHS: 200
 DEVICE: cuda
 N_WORKERS: 6
-BATCH_SIZE: 32
+BATCH_SIZE: 16
 SEED: 303
 
 # dataset path
@@ -12,7 +12,7 @@ DS_PATHS:
   widerface: /home/rgasparini/Downloads/widerface
   face_mask: /home/rgasparini/Downloads/face_mask_dataset
 
-DS_CLASSIFY: 0
+DS_CLASSIFY: 1
 
 # network input shape as keras channel last ordering separated by ',' , data input will be resized to that shape proportionally and keeping the original AR
 INPUT_SHAPE: 352,352,3
