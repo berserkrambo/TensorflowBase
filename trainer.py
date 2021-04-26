@@ -201,9 +201,9 @@ class Trainer(object):
         # log average loss of this epoch
         with self.sw.as_default():
             tf.summary.scalar(name='train_loss', data=np.mean(self.train_losses["total"]), step=self.epoch)
-            # tf.summary.scalar(name='train_mse_c', data=np.mean(self.train_losses["mse_c"]), step=self.epoch)
+            tf.summary.scalar(name='train_mse_c', data=np.mean(self.train_losses["mse_c"]), step=self.epoch)
             tf.summary.scalar(name='train_mse_s', data=np.mean(self.train_losses["mse_s"]), step=self.epoch)
-            tf.summary.scalar(name='train_mse_cnt', data=np.mean(self.train_losses["mse_cnt"]), step=self.epoch)
+            # tf.summary.scalar(name='train_mse_cnt', data=np.mean(self.train_losses["mse_cnt"]), step=self.epoch)
             self.sw.flush()
         self.reset_metric()
 
