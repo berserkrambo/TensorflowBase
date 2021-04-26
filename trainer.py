@@ -132,7 +132,7 @@ class Trainer(object):
             x, y_true, meta = sample
             x = x.numpy().transpose(0,2,3,1)
             # meta = meta.numpy().transpose(0,2,3,1)
-            y_true_h, y_true_sz = y_true[0].numpy().transpose(0,2,3,1), y_true[1].numpy()
+            y_true_h, y_true_sz = y_true[0].numpy().transpose(0,2,3,1), y_true[1].unsqueeze(3).numpy()
             # Open a GradientTape to record the operations run
             # during the forward pass, which enables auto-differentiation.
             with tf.GradientTape() as tape:
@@ -163,27 +163,7 @@ class Trainer(object):
             self.train_losses["total"].append(loss)
 
             if step == stop:
-                hm = torch.from_numpy(y_pred_h.numpy())
-                hm = torch.nn.functional.max_pool2d(hm, kernel_size=5, padding=2, stride=1)
-                hm = hm.numpy()
-                hm[hm <= 0.7] = 0.0
-                hm[hm > 1.0] = 1.0
-                hm *= 255
-
-                to_show = []
-                for i, hi in enumerate(hm.squeeze().astype(np.uint8)):
-                    hii = np.stack([hi, hi, hi], axis=2)
-                    hii = cv2.resize(hii, (self.cnf.input_shape[0], self.cnf.input_shape[0]))
-
-                    hii = cv2.applyColorMap(hii, cv2.COLORMAP_JET)
-
-                    hii = cv2.addWeighted((x[i] * 255).astype(np.uint8), 0.6, hii, 0.4, 0)
-
-                    to_show.append(np.asarray(hii, dtype=np.float32) / 255.0)
-
-                to_show = torch.from_numpy(np.asarray(to_show, dtype=np.float32).transpose(0, 3, 1, 2))
-                grid = tv.utils.make_grid(to_show, normalize=True, range=(0, 1), nrow=x.shape[0])
-                grid = np.expand_dims((grid.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0), axis=0)
+                grid = self.get_grid_view(x,y_pred_h, y_pred_s)
                 with self.sw.as_default():
                     tf.summary.image(name=f'results_train', data=grid, step=self.epoch)
                     self.sw.flush()
@@ -221,7 +201,7 @@ class Trainer(object):
                 x, y_true, meta = sample
                 x = x.numpy().transpose(0, 2, 3, 1)
                 # meta = meta.numpy().transpose(0,2,3,1)
-                y_true_h, y_true_sz = y_true[0].numpy().transpose(0, 2, 3, 1), y_true[1].numpy()
+                y_true_h, y_true_sz = y_true[0].numpy().transpose(0, 2, 3, 1), y_true[1].unsqueeze(3).numpy()
                 y_pred_h, y_pred_s = self.model(x, training=False)
 
                 self.test_h_mse_metric.update_state(y_true_h, y_pred_h)
@@ -234,27 +214,7 @@ class Trainer(object):
                 # row #3: target (y_true)
 
                 if step == stop:
-                    hm = torch.from_numpy(y_pred_h.numpy())
-                    hm = torch.nn.functional.max_pool2d(hm, kernel_size=5, padding=2, stride=1)
-                    hm = hm.numpy()
-                    hm[hm <= 0.7] = 0.0
-                    hm[hm > 1.0] = 1.0
-                    hm *= 255
-
-                    to_show = []
-                    for i, hi in enumerate(hm.squeeze().astype(np.uint8)):
-                        hii = np.stack([hi, hi, hi], axis=2)
-                        hii = cv2.resize(hii, (self.cnf.input_shape[0], self.cnf.input_shape[0]))
-
-                        hii = cv2.applyColorMap(hii, cv2.COLORMAP_JET)
-
-                        hii = cv2.addWeighted((x[i] * 255).astype(np.uint8), 0.6, hii, 0.4, 0)
-
-                        to_show.append(np.asarray(hii, dtype=np.float32) / 255.0)
-
-                    to_show = torch.from_numpy(np.asarray(to_show, dtype=np.float32).transpose(0, 3, 1, 2))
-                    grid = tv.utils.make_grid(to_show, normalize=True, range=(0, 1), nrow=x.shape[0])
-                    grid = np.expand_dims((grid.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0), axis=0)
+                    grid = self.get_grid_view(x,y_pred_h, y_pred_s)
                     with self.sw.as_default():
                         tf.summary.image(name=f'results_test', data=grid, step=self.epoch)
                         self.sw.flush()
@@ -310,18 +270,19 @@ class Trainer(object):
                 f.write(tflite_model)
 
     def get_grid_view(self, x, hm, sz):
-        x_np = (x * 255).cpu().numpy().transpose(0, 2, 3, 1).astype(np.uint8)
-        hm, sz  = hm.detach(), sz.detach()
+        x_np = (x * 255).astype(np.uint8)
+        hm, sz = hm.numpy(), sz.numpy().squeeze()
+        hm = torch.from_numpy(hm.transpose(0, 3, 2, 1))
         to_show = []
 
         # simple nms
         hmax = torch.nn.functional.max_pool2d(hm, kernel_size=5, padding=2, stride=1)
         keep = (hmax == hm).float()
         hm *= keep
-
+        hm = hm.numpy()
         for bi in range(len(x_np)):
-            hm_np = hm[bi].cpu().numpy()
-            sz_np = sz[bi].squeeze().cpu().numpy()
+            hm_np = hm[bi]
+            sz_np = sz[bi]
 
             xi = x_np[bi].copy()
             for chi in range(0, self.cnf.ds_classify + 1):
@@ -356,6 +317,7 @@ class Trainer(object):
             to_show.append(np.asarray(xi, dtype=np.float32) / 255.0)
         to_show = torch.from_numpy(np.asarray(to_show, dtype=np.float32).transpose(0, 3, 1, 2))
         grid = tv.utils.make_grid(to_show, normalize=True, range=(0, 1), nrow=x.shape[0])
+        grid = (grid.cpu().numpy() * 255).astype(np.uint8).transpose(1,2,0)
         return grid
 
     def run(self):
