@@ -102,19 +102,18 @@ class Trainer(object):
         load training checkpoint
         """
 
-        # if self.cnf.ds_classify:
-        #     base_w_path = Path(self.cnf.exp_weights_path + "_base") / "best"
-        #     assert base_w_path.exists(), "no best_base found"
-        #     print(f'[loading base checkpoint \'{base_w_path}\']')
-        #     self.model = keras.models.load_model(base_w_path)
-        #     print(f'[loaded checkpoint \'{base_w_path}\']')
-        #
-        #     layers = self.model.layers
-        #
-        #     for li, l in enumerate(layers):
-        #         if l.name == "hm":
-        #             layers[li].filters = 2
-        #     self.model = keras.Model(inputs=self.model.input, outputs=[hm, s])
+        if self.cnf.ds_classify:
+            base_w_path = Path(self.cnf.exp_weights_path + "_base") / "best"
+            assert base_w_path.exists(), "no best_base found"
+            print(f'[loading base checkpoint \'{base_w_path}\']')
+
+            base_model = keras.models.load_model(base_w_path)
+            for l_tg, l_sr in zip(self.model.layers, base_model.layers):
+                wk0 = l_sr.get_weights()
+                if l_tg.name == "hm":
+                    continue
+                l_tg.set_weights(wk0)
+            print(f'[loaded checkpoint \'{base_w_path}\']')
 
         if self.cnf.exp_weights_path.exists():
             # self.model.load_weights(latest)
@@ -200,7 +199,7 @@ class Trainer(object):
             # self.train_losses["mse_cnt"].append(loss_cnt)
             self.train_losses["total"].append(loss)
 
-            if step == stop:
+            if step == 0:
                 grid = self.get_grid_view(x,y_pred_h, y_pred_s)
                 with self.sw.as_default():
                     tf.summary.image(name=f'results_train', data=grid, step=self.epoch)
