@@ -295,13 +295,11 @@ class Trainer(object):
 
             def representative_dataset_gen():
                 img_list = []
-                for batch in self.train_loader:
-                    # Get sample input data as a numpy array in a method of your choosing.
-                    for img in batch[0]:
-                        img_list.append(img)
+                tensor = tf.random.uniform(shape=self.cnf.input_shape)
+                img_list.append(tensor)
 
                 img = tf.data.Dataset.from_tensor_slices(img_list).batch(1)
-                for i in img.take(self.cnf.batch_size):
+                for i in img.take(1):
                     yield [i]
 
             converter.representative_dataset = representative_dataset_gen
@@ -372,12 +370,12 @@ class Trainer(object):
         """
         start model training procedure (train > test > checkpoint > repeat)
         """
-        for _ in range(self.epoch, self.cnf.epochs):
-            self.train()
-            self.test()
-            self.save_ck()
-
-            self.epoch += 1
+        # for _ in range(self.epoch, self.cnf.epochs):
+        #     self.train()
+        #     self.test()
+        #     self.save_ck()
+        #
+        #     self.epoch += 1
 
         if self.cnf.export_tflite:
             self.export_tflite()
