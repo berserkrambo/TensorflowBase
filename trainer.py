@@ -3,7 +3,6 @@
 
 
 from conf import Conf
-from dataset.widerface import DataGenerator
 from models.model import get_model
 
 import tensorflow as tf
@@ -17,6 +16,7 @@ import torchvision as tv
 from torch.utils.data import DataLoader
 from dataset.dataset import Data
 from path import Path
+import pickle
 
 
 class Trainer(object):
@@ -59,9 +59,9 @@ class Trainer(object):
         # self.loss_mae = tf.keras.losses.MeanAbsoluteError()
 
         # init metrics
-        self.test_h_mse_metric = keras.metrics.MeanSquaredError()
+        # self.test_h_mse_metric = keras.metrics.MeanSquaredError()
         # self.test_cnt_mse_metric = keras.metrics.MeanSquaredError()
-        self.test_s_mse_metric = keras.metrics.MeanSquaredError()
+        # self.test_s_mse_metric = keras.metrics.MeanSquaredError()
 
         # compile the model
         # self.model.compile(optimizer=self.optimizer,
@@ -89,9 +89,9 @@ class Trainer(object):
         self.progress_bar = ProgressBar(max_step=self.log_freq, max_epoch=self.cnf.epochs)
 
         # possibly load checkpoint
+        self.best_epoc = 0
         self.load_ck()
         self.reset_metric()
-        self.best_epoc = 0
 
     def reset_metric(self):
         self.train_losses = {"mse_c": [], "mse_s": [], "mse_cnt": [], "total": []}
@@ -105,7 +105,6 @@ class Trainer(object):
         if self.cnf.ds_classify:
             base_w_path = Path(self.cnf.exp_weights_path + "_base") / "best"
             assert base_w_path.exists(), "no best_base found"
-            print(f'[loading base checkpoint \'{base_w_path}\']')
 
             base_model = keras.models.load_model(base_w_path)
             for l_tg, l_sr in zip(self.model.layers, base_model.layers):
@@ -113,11 +112,17 @@ class Trainer(object):
                 if l_tg.name == "hm":
                     continue
                 l_tg.set_weights(wk0)
-            print(f'[loaded checkpoint \'{base_w_path}\']')
+            print(f'[loaded base checkpoint \'{base_w_path}\']')
 
         if self.cnf.exp_weights_path.exists():
             # self.model.load_weights(latest)
             self.model = keras.models.load_model(self.cnf.exp_weights_path)
+            with open(self.cnf.exp_weights_path / "tr.pkl", 'rb') as fs:
+                tr_data = pickle.load(fs)
+                self.epoch = tr_data['epoch']
+                self.best_epoc = tr_data['best_epoch']
+                self.best_test_loss = tr_data['best_test_loss']
+
             print(f'[loaded checkpoint \'{self.cnf.exp_weights_path}\']')
 
 
@@ -125,8 +130,19 @@ class Trainer(object):
         """
         save training checkpoint
         """
-        save_path = self.cnf.exp_weights_path if save_opt else self.cnf.exp_weights_path / "best"
+        save_path = self.cnf.exp_weights_path
+        with open(save_path / "tr.pkl", 'wb') as fs:
+            pickle.dump({
+                'epoch': self.epoch,
+                'best_epoch': self.best_epoc,
+                'best_test_loss': self.best_test_loss
+            }, fs)
+
+        if not save_opt:
+            save_path = self.cnf.exp_weights_path / "best"
+
         keras.models.save_model(self.model, save_path, include_optimizer=save_opt)
+
 
     def mse(self, y_true, y_pred, mask=None):
         y_pred = tf.convert_to_tensor(y_pred)
