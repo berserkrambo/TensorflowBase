@@ -16,7 +16,7 @@ import torch
 import torchvision as tv
 from torch.utils.data import DataLoader
 from dataset.dataset import Data
-
+from path import Path
 
 
 class Trainer(object):
@@ -101,6 +101,13 @@ class Trainer(object):
         """
         load training checkpoint
         """
+
+        if self.cnf.ds_classify:
+            base_w_path = Path(self.cnf.exp_weights_path + "_base") / "best"
+            assert base_w_path.exists(), "no best_base found"
+            print(f'[loading base checkpoint \'{base_w_path}\']')
+            self.model = keras.models.load_model(base_w_path)
+            print(f'[loaded checkpoint \'{base_w_path}\']')
 
         if self.cnf.exp_weights_path.exists():
             # self.model.load_weights(latest)
