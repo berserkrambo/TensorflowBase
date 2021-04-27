@@ -287,10 +287,10 @@ class Trainer(object):
         convert saved checkpoint to tflite
         """
 
-        if self.cnf.exp_weights_path.exists():
+        if (self.cnf.exp_weights_path / "best").exists():
 
             # Convert the model.
-            converter = tf.lite.TFLiteConverter.from_saved_model(self.cnf.exp_weights_path)
+            converter = tf.lite.TFLiteConverter.from_saved_model(self.cnf.exp_weights_path / "best")
             converter.optimizations = [tf.lite.Optimize.DEFAULT]  # quant 8 bit
 
             def representative_dataset_gen():
