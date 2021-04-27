@@ -199,7 +199,7 @@ class Trainer(object):
             # self.train_losses["mse_cnt"].append(loss_cnt)
             self.train_losses["total"].append(loss)
 
-            if step == 0:
+            if step == stop:
                 grid = self.get_grid_view(x,y_pred_h, y_pred_s)
                 with self.sw.as_default():
                     tf.summary.image(name=f'results_train', data=grid, step=self.epoch)
