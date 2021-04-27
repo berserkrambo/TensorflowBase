@@ -132,6 +132,7 @@ class Trainer(object):
         save training checkpoint
         """
         save_path = self.cnf.exp_weights_path
+        save_path.makedirs_p()
         with open(save_path / "tr.pkl", 'wb') as fs:
             pickle.dump({
                 'epoch': self.epoch,
