@@ -24,6 +24,7 @@ class Trainer(object):
     def __init__(self, cnf):
         # type: (Conf) -> Trainer
         physical_devices = tf.config.list_physical_devices('GPU')
+        print("------------\n", physical_devices, "------------\n")
         tf.config.experimental.set_memory_growth(physical_devices[0], True)
         self.cnf = cnf
 

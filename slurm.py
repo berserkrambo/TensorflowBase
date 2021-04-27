@@ -21,7 +21,8 @@ TEMPLATE = '''#!/bin/bash
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
 
-source activate python3
+module unload cuda
+module load cuda/11.0
 
 cd **project**
 srun python -u main.py --exp_name '**exp**!' --conf_file_path '**cnf**'
