@@ -102,17 +102,25 @@ class Trainer(object):
         load training checkpoint
         """
 
-        if self.cnf.ds_classify:
-            base_w_path = Path(self.cnf.exp_weights_path + "_base") / "best"
-            assert base_w_path.exists(), "no best_base found"
-            print(f'[loading base checkpoint \'{base_w_path}\']')
-            self.model = keras.models.load_model(base_w_path)
-            print(f'[loaded checkpoint \'{base_w_path}\']')
+        # if self.cnf.ds_classify:
+        #     base_w_path = Path(self.cnf.exp_weights_path + "_base") / "best"
+        #     assert base_w_path.exists(), "no best_base found"
+        #     print(f'[loading base checkpoint \'{base_w_path}\']')
+        #     self.model = keras.models.load_model(base_w_path)
+        #     print(f'[loaded checkpoint \'{base_w_path}\']')
+        #
+        #     layers = self.model.layers
+        #
+        #     for li, l in enumerate(layers):
+        #         if l.name == "hm":
+        #             layers[li].filters = 2
+        #     self.model = keras.Model(inputs=self.model.input, outputs=[hm, s])
 
         if self.cnf.exp_weights_path.exists():
             # self.model.load_weights(latest)
             self.model = keras.models.load_model(self.cnf.exp_weights_path)
             print(f'[loaded checkpoint \'{self.cnf.exp_weights_path}\']')
+
 
     def save_ck(self, save_opt=True):
         """
