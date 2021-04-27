@@ -370,12 +370,12 @@ class Trainer(object):
         """
         start model training procedure (train > test > checkpoint > repeat)
         """
-        # for _ in range(self.epoch, self.cnf.epochs):
-        #     self.train()
-        #     self.test()
-        #     self.save_ck()
-        #
-        #     self.epoch += 1
+        for _ in range(self.epoch, self.cnf.epochs):
+            self.train()
+            self.test()
+            self.save_ck()
+
+            self.epoch += 1
 
         if self.cnf.export_tflite:
             self.export_tflite()
