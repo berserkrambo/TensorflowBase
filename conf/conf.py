@@ -85,7 +85,7 @@ class Conf(object):
         self.n_workers = y.get('N_WORKERS', 4)  # type: int
         self.batch_size = y.get('BATCH_SIZE', 8)  # type: int
         self.stride = y.get('STRIDE', 4)  # type: int
-        self.model = y.get('MODEL', "mobilenet")  # type: str
+        self.model = y.get('MODEL', "mobilenet-v1")  # type: str
         seed = y.get('SEED', None)  # type: int
         self.seed = set_seed(seed)  # type: int
         default_device = 'cuda'

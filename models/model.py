@@ -3,7 +3,7 @@ from tf2_resnets import models
 
 
 def get_model(input_shape, model_str, hm_ch):
-    if model_str == "mobilenet":
+    if model_str == "mobilenet-v2":
         base_model = keras.applications.MobileNetV2(
             input_shape=input_shape,
             alpha=1.0,
@@ -13,10 +13,25 @@ def get_model(input_shape, model_str, hm_ch):
     elif model_str == "resnet":
         base_model = models.ResNet18(input_shape=input_shape, weights='imagenet', include_top=False)
 
-    x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(
-        base_model.output)
-    x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(x)
-    x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(x)
+    elif model_str == "mobilenet-v1":
+        base_model = keras.applications.MobileNet(
+            input_shape=input_shape,
+            alpha=1.0,
+            include_top=False,
+            weights="imagenet",
+        )
+
+    # x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(
+    #     base_model.output)
+    # x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(x)
+    # x = keras.layers.Conv2DTranspose(filters=64, kernel_size=4, padding='same', strides=(2, 2), activation='relu')(x)
+
+    x = keras.layers.UpSampling2D()(base_model.output)
+    x = keras.layers.Conv2D(filters=64, kernel_size=4, padding='same', strides=(1,1), activation='relu')(x)
+    x = keras.layers.UpSampling2D()(x)
+    x = keras.layers.Conv2D(filters=64, kernel_size=4, padding='same', strides=(1,1), activation='relu')(x)
+    x = keras.layers.UpSampling2D()(x)
+    x = keras.layers.Conv2D(filters=64, kernel_size=4, padding='same', strides=(1,1), activation='relu')(x)
 
     # heatmap prediction
     hm = keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', activation='relu')(x)
@@ -33,6 +48,6 @@ def get_model(input_shape, model_str, hm_ch):
     return model
 
 if __name__ == '__main__':
-    input_shape = (352,352,3)
-    model = get_model(input_shape, "resnet")
+    input_shape = (320,320,3)
+    model = get_model(input_shape, "mobilenet-v1", 2)
     model.summary()

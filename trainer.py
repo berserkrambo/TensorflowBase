@@ -39,7 +39,7 @@ class Trainer(object):
         training_set = Data(cnf, partition='train')
         self.train_loader = DataLoader(
             dataset=training_set, batch_size=cnf.batch_size,
-            num_workers=cnf.n_workers, shuffle=True, pin_memory=True, worker_init_fn=asd, drop_last=True
+            num_workers=cnf.n_workers, shuffle=True, worker_init_fn=asd, drop_last=True
         )
 
         # init test loader
@@ -348,8 +348,9 @@ class Trainer(object):
             sz_np = sz[bi]
 
             xi = x_np[bi].copy()
+            lin = self.cnf.input_shape[0]//self.cnf.stride
             for chi in range(0, self.cnf.ds_classify + 1):
-                ind = np.argpartition(hm_np[chi].squeeze().flatten(), -88)[-88:]
+                ind = np.argpartition(hm_np[chi].squeeze().flatten(), -lin)[-lin:]
 
                 # out = np.zeros(shape=(self.cnf.input_shape[0], self.cnf.input_shape[1], 3 ), dtype=np.uint8)
                 for v in ind:
